@@ -1,9 +1,10 @@
 import numpy as np
 import cvxpy as cp
 import time
-from subproblem import Subproblem
-from curvature_updates import CurvatureUpdate
-from algmode import *
+
+from osmm.subproblem import Subproblem
+from osmm.curvature_updates import CurvatureUpdate
+from osmm.alg_mode import AlgMode
 
 
 class OsmmUpdate:
@@ -11,8 +12,7 @@ class OsmmUpdate:
         self.problem_instance = problem_instance
         self.curvature_update = CurvatureUpdate(problem_instance)
 
-    def initialization(self, H_rank, pieces_num, alg_mode, tau_min, ini_by_Hutchison, H_0_min, minibatch_size,
-                       num_samples_Jacobian):
+    def initialization(self, H_rank, pieces_num, alg_mode, tau_min, ini_by_Hutchison):
         x_0 = self.problem_instance.get_initial_val()
         f_0 = self.problem_instance.f_value(x_0)
         if self.problem_instance.eval_validate:
@@ -57,13 +57,6 @@ class OsmmUpdate:
         f_grads_iters_value = f_grad_0.repeat(pieces_num).reshape((self.problem_instance.n, pieces_num))
         f_const_iters_value = np.ones(pieces_num) * (f_0 - f_grad_0.dot(x_0))
 
-        # if alg_mode.add_bundle():
-        #     f_grads_iters_value = f_grad_0.repeat(pieces_num).reshape((self.n, pieces_num))
-        #     f_const_iters_value = np.ones(pieces_num) * (f_0 - f_grad_0.dot(x_0))
-        # else:
-        #     f_grads_iters_value = f_grad_0.reshape((self.n, 1))
-        #     f_const_iters_value = np.array([f_0 - f_grad_0.dot(x_0)])
-
         diag_H_0 = np.zeros(self.problem_instance.n)
         G_0 = np.zeros((self.problem_instance.n, H_rank))
         if alg_mode == AlgMode.Exact:
@@ -78,31 +71,35 @@ class OsmmUpdate:
         elif alg_mode == AlgMode.Hutchinson:
             diag_H_0 = self.curvature_update.Hutchison_update(x_0)
 
-        elif alg_mode == AlgMode.LowRankDiag or alg_mode == AlgMode.LowRankDiagPlusBundle:
+        elif alg_mode == AlgMode.LowRankDiagBundle:
             G_0, diag_H_0 = self.curvature_update.low_rank_diag_update(x_0, H_rank)
 
-        elif alg_mode == AlgMode.LowRankNewSamp or alg_mode == AlgMode.LowRankNewSampPlusBundle:
+        elif alg_mode == AlgMode.LowRankNewSampBundle:
             G_0, diag_H_0 = self.curvature_update.low_rank_new_samp_update(x_0, H_rank)
 
-        # elif alg_mode == AlgMode.OuterProd or alg_mode == AlgMode.OuterProdPlusBundle:
-        #     _, N = W.shape
-            # G_0 = outer_prod_update(x_0, W, num_samples_Jacobian, N, self.f_Jacobian_value, H_rank)
-
-        elif alg_mode == AlgMode.BFGS or alg_mode == AlgMode.LBFGS or alg_mode == AlgMode.BFGSPlusBundle or \
-                alg_mode == AlgMode.LBFGSPlusBundle:
-            G_0 = np.eye(self.problem_instance.n) * np.sqrt(max(H_0_min, np.linalg.norm(f_grad_0)))
-
-        elif alg_mode == AlgMode.LowRankQNPlusBundleNoLambda:
-            lam_0 = 0
+        elif alg_mode == AlgMode.BFGSBundle:
+            G_0 = np.eye(self.problem_instance.n) * np.sqrt(max(tau_min, np.linalg.norm(f_grad_0)))
 
         return subprob, x_0, objf_0, objf_validation_0, f_0, f_grad_0, g_0, lam_0, f_grads_iters_value, \
                f_const_iters_value, G_0, diag_H_0
 
+    def _stopping_criteria(self, objf_k_plus_one, objf_validation_k_plus_one, L_k_plus_one, t_k, opt_res_norm_k_plus_one,
+                          q_norm_k_plus_one, f_grad_norm_k_plus_one,
+                          eps_gap_rel=1e-4, eps_res_abs=1e-4, eps_res_rel=1e-4):
+        if objf_validation_k_plus_one is not None and objf_k_plus_one is not None and objf_k_plus_one < np.inf and \
+                objf_k_plus_one - L_k_plus_one <= np.abs(objf_k_plus_one - objf_validation_k_plus_one) \
+                + eps_gap_rel * np.abs(objf_k_plus_one):
+            return True
+        if t_k == 1 and \
+                opt_res_norm_k_plus_one <= self.problem_instance.n * eps_res_abs \
+                + eps_res_rel * (q_norm_k_plus_one + f_grad_norm_k_plus_one):
+            return True
+        return False
+
     def update_func(self, subprob, round_idx, objf_k, g_k, lower_bound_k, f_grad_k,
                     f_grads_iters_value, f_const_iters_value, G_k, diag_H_k, lam_k, mu_k,
-                    Y_lbfgs, S_lbfgs, lbfgs_update_round_idx,
                     alg_mode=None, H_rank=None, pieces_num=None, solver=None,
-                    num_samples_Jacobian=None, minibatch_size=None, gamma_inc=None, gamma_dec=None,
+                    gamma_inc=None, gamma_dec=None,
                     mu_min=None, tau_min=None, mu_max=None, ep=None,
                     beta=None, j_max=None, alpha=None, num_iter_eval_Lk=None):
         if solver == "OSQP":
@@ -126,10 +123,12 @@ class OsmmUpdate:
         subprob.diag_H_para.value = diag_H_k
 
         begin_solve_time = time.time()
+        subp_solver_success = True
         try:
             cvxpy_subp.solve(solver=solver, verbose=False)
         except Exception as e:
-            print("iteration", round_idx, ", solver status: ", cvxpy_subp.status,
+            subp_solver_success = False
+            print("iter.", round_idx, ", solver status: ", cvxpy_subp.status,
                   ", x update is None", self.problem_instance.x_var_cvxpy.value is None, ", error message: ", e)
         if self.problem_instance.x_var_cvxpy.value is None:
             self.problem_instance.x_var_cvxpy.value = xk
@@ -140,8 +139,15 @@ class OsmmUpdate:
         bundle_dual = subprob.bundle_constr[0].dual_value
 
         begin_line_search_time = time.time()
-        x_k_plus_one, f_k_plus_one, tk, num_f_evas_line_search, f_eva_time_cost \
-            = self.line_search(x_k_plus_half, xk, g_k_plus_half, g_k, objf_k, G_k, lam_k, beta, j_max, alpha)
+        if subp_solver_success:
+            x_k_plus_one, f_k_plus_one, tk, num_f_evas_line_search, f_eva_time_cost \
+                = self._line_search(x_k_plus_half, xk, g_k_plus_half, g_k, objf_k, G_k, lam_k, beta, j_max, alpha)
+        else:
+            x_k_plus_one = xk
+            f_k_plus_one = objf_k - g_k
+            tk = 0
+            num_f_evas_line_search = j_max
+            f_eva_time_cost = 0
         end_line_search_time = time.time()
 
         self.problem_instance.x_var_cvxpy.value = x_k_plus_one
@@ -158,29 +164,30 @@ class OsmmUpdate:
         end_evaluate_f_grad_time = time.time()
 
         v_k = x_k_plus_half - xk
-        if pieces_num == 1:
-            q_k_plus_one = - G_k.dot(G_k.T.dot(v_k)) - lam_k * v_k - f_grads_iters_value[:, 0]
+        if bundle_dual is None:
+            q_k_plus_one = np.inf
+            opt_residual = np.inf
         else:
-            q_k_plus_one = - G_k.dot(G_k.T.dot(v_k)) - lam_k * v_k - f_grads_iters_value.dot(bundle_dual)
-        opt_residual = np.linalg.norm(f_grad_k_plus_one + q_k_plus_one)
+            if pieces_num == 1:
+                q_k_plus_one = - G_k.dot(G_k.T.dot(v_k)) - lam_k * v_k - f_grads_iters_value[:, 0]
+            else:
+                q_k_plus_one = - G_k.dot(G_k.T.dot(v_k)) - lam_k * v_k - f_grads_iters_value.dot(bundle_dual)
+            opt_residual = np.linalg.norm(f_grad_k_plus_one + q_k_plus_one)
 
-        f_grads_iters_value, f_const_iters_value = self.update_l_k(round_idx, pieces_num, x_k_plus_one,
-                                                                   f_k_plus_one, f_grad_k_plus_one,
-                                                                   f_grads_iters_value, f_const_iters_value)
+        f_grads_iters_value, f_const_iters_value = self._update_l_k(round_idx, pieces_num, x_k_plus_one,
+                                                                    f_k_plus_one, f_grad_k_plus_one,
+                                                                    f_grads_iters_value, f_const_iters_value)
 
         begin_update_curvature_time = time.time()
-        G_k_plus_one, diag_H_k_plus_one, lbfgs_update_round_idx = \
-            self.update_curvature_after_solve(alg_mode, G_k, x_k_plus_one, xk, f_grad_k_plus_one, f_grad_k, pieces_num,
-                                              num_samples_Jacobian, H_rank, Y_lbfgs, S_lbfgs, lbfgs_update_round_idx)
+        G_k_plus_one, diag_H_k_plus_one = \
+            self._update_curvature_after_solve(alg_mode, G_k, x_k_plus_one, xk, f_grad_k_plus_one, f_grad_k, H_rank)
         end_update_curvature_time = time.time()
 
         tr_H_k_plus_one = np.square(max(ep, np.linalg.norm(G_k_plus_one, 'fro')))
         tau_k_plus_one = tr_H_k_plus_one / self.problem_instance.n / H_rank
 
-        lam_k_plus_one, mu_k_plus_one = self.update_trust_params(mu_k, tk, tau_k_plus_one,
-                                                                 tau_min, mu_min, mu_max, gamma_inc, gamma_dec)
-        if alg_mode == AlgMode.LowRankQNPlusBundleNoLambda:
-            lam_k_plus_one = 0.0
+        lam_k_plus_one, mu_k_plus_one = self._update_trust_params(mu_k, tk, tau_k_plus_one,
+                                                                  tau_min, mu_min, mu_max, gamma_inc, gamma_dec)
 
         begin_evaluate_L_k = 0
         end_evaluate_L_k = 0
@@ -196,7 +203,12 @@ class OsmmUpdate:
             end_evaluate_L_k = time.time()
             print("iter=", round_idx, "objf_k+1=", objf_k_plus_one, "L_k+1=", lower_bound_k_plus_one,
                   "lam_k+1=", lam_k_plus_one, "tk=", tk, "mu_k+1", mu_k_plus_one,
-                  "||G_k+1||_F=", np.linalg.norm(G_k_plus_one, 'fro'), "tr_H_k+1 / n", tau_k_plus_one)
+                  "||G_k+1||_F=", np.linalg.norm(G_k_plus_one, 'fro'), "tau_k+1", tau_k_plus_one)
+
+        stopping_criteria_satisfied = self._stopping_criteria(objf_k_plus_one, objf_validation_k_plus_one,
+                                                              lower_bound_k_plus_one, tk, opt_residual,
+                                                              np.linalg.norm(q_k_plus_one),
+                                                              np.linalg.norm(f_grad_k_plus_one))
 
         if self.problem_instance.is_save:
             self.problem_instance.method_results["time_cost_detail_iters"][0, round_idx] = f_eva_time_cost
@@ -230,11 +242,11 @@ class OsmmUpdate:
         self.problem_instance.method_results["lower_bound_iters"][round_idx] = lower_bound_k_plus_one
         self.problem_instance.method_results["iters_taken"] = round_idx
 
-        return x_k_plus_one, objf_k_plus_one, g_k_plus_one, lower_bound_k_plus_one, f_grad_k_plus_one,\
-               f_grads_iters_value, f_const_iters_value, G_k_plus_one, diag_H_k_plus_one, lam_k_plus_one, mu_k_plus_one,\
-               Y_lbfgs, S_lbfgs, lbfgs_update_round_idx
+        return stopping_criteria_satisfied, x_k_plus_one, objf_k_plus_one, g_k_plus_one, lower_bound_k_plus_one, \
+               f_grad_k_plus_one,f_grads_iters_value, f_const_iters_value, G_k_plus_one, diag_H_k_plus_one, \
+               lam_k_plus_one, mu_k_plus_one
 
-    def line_search(self, x_k_plus_half, xk, g_k_plus_half, g_k, objf_k, G_k, lam_k, beta, j_max, alpha, tol=1e-5, ep=1e-15):
+    def _line_search(self, x_k_plus_half, xk, g_k_plus_half, g_k, objf_k, G_k, lam_k, beta, j_max, alpha, tol=1e-5, ep=1e-15):
         v_k = x_k_plus_half - xk
 
         begin_evaluate_f_time = time.time()
@@ -245,6 +257,7 @@ class OsmmUpdate:
         #                                  f_x_k_plus_half + g_k_plus_half - objf_k <= tol * np.abs(objf_k):
         #     print("t = 1 because of too small increment")
         #     return x_k_plus_half, f_x_k_plus_half, 1.0, 0, end_evaluate_f_time - begin_evaluate_f_time
+
         desc = np.square(max(ep, np.linalg.norm(np.dot(G_k.T, v_k)))) + lam_k * np.square(max(ep, np.linalg.norm(v_k)))
         f_tmp = f_x_k_plus_half
         phi_line_search = f_tmp + g_k_plus_half
@@ -257,9 +270,7 @@ class OsmmUpdate:
             j += 1
         return t * x_k_plus_half + (1 - t) * xk, f_tmp, t, j, end_evaluate_f_time - begin_evaluate_f_time
 
-    def update_curvature_after_solve(self, alg_mode, G_k, x_k_plus_one, xk, f_grad_k_plus_one, f_grad_k, pieces_num,
-                                     num_samples_Jacobian, H_rank,
-                                     Y_lbfgs, S_lbfgs, lbfgs_update_round_idx):
+    def _update_curvature_after_solve(self, alg_mode, G_k, x_k_plus_one, xk, f_grad_k_plus_one, f_grad_k, H_rank):
         G_k_plus_one = np.zeros((self.problem_instance.n, H_rank))
         diag_H_k_plus_one = np.zeros(self.problem_instance.n)
 
@@ -275,33 +286,23 @@ class OsmmUpdate:
         elif alg_mode == AlgMode.Hutchinson:
             diag_H_k_plus_one = self.curvature_update.Hutchison_update(x_k_plus_one)
 
-        elif alg_mode == AlgMode.LowRankDiag or alg_mode == AlgMode.LowRankDiagPlusBundle:
+        elif alg_mode == AlgMode.LowRankDiagBundle:
             G_k_plus_one, diag_H_k_plus_one = self.curvature_update.low_rank_diag_update(x_k_plus_one, H_rank)
 
-        elif alg_mode == AlgMode.LowRankNewSamp or alg_mode == AlgMode.LowRankNewSampPlusBundle:
+        elif alg_mode == AlgMode.LowRankNewSampBundle:
             G_k_plus_one, diag_H_k_plus_one = self.curvature_update.low_rank_new_samp_update(x_k_plus_one, H_rank)
 
-        # elif alg_mode == AlgMode.OuterProd or alg_mode == AlgMode.OuterProdPlusBundle:
-        #     G_k_plus_one = outer_prod_update(x_k_plus_one, W, num_samples_Jacobian, N, self.f_Jacobian_value, H_rank)
-
-        elif alg_mode == AlgMode.BFGS or alg_mode == AlgMode.BFGSPlusBundle:
+        elif alg_mode == AlgMode.BFGSBundle:
             G_k_plus_one = self.curvature_update.BFGS_update(G_k, x_k_plus_one, xk, f_grad_k_plus_one, f_grad_k)
 
-        elif alg_mode == AlgMode.LBFGS or alg_mode == AlgMode.LBFGSPlusBundle:
-            G_k_plus_one, lbfgs_update_round_idx = self.curvature_update.LBFGS_update(G_k, x_k_plus_one, xk,
-                                                                                      f_grad_k_plus_one, f_grad_k,
-                                                                                      pieces_num // 2, Y_lbfgs, S_lbfgs,
-                                                                                      lbfgs_update_round_idx)  # Y_lbfgs, S_lbfgs updated
-
-        elif alg_mode == AlgMode.LowRankQN or alg_mode == AlgMode.LowRankQNPlusBundle or alg_mode == \
-                AlgMode.LowRankQNPlusBundleNoLambda:
+        elif alg_mode == AlgMode.LowRankQNBundle:
             G_k_plus_one = self.curvature_update.low_rank_quasi_Newton_update(G_k, x_k_plus_one, xk, f_grad_k_plus_one,
-                                                                              f_grad_k)
+                                                                              f_grad_k, H_rank)
 
-        return G_k_plus_one, diag_H_k_plus_one, lbfgs_update_round_idx
+        return G_k_plus_one, diag_H_k_plus_one
 
-    def update_l_k(self, round_idx, pieces_num, x_k_plus_one, f_k_plus_one, f_grad_k_plus_one, f_grads_iters_value,
-                   f_const_iters_value):
+    def _update_l_k(self, round_idx, pieces_num, x_k_plus_one, f_k_plus_one, f_grad_k_plus_one, f_grads_iters_value,
+                    f_const_iters_value):
         '''
         update f_grads_iters_value and f_const_iters_value
         '''
@@ -320,7 +321,7 @@ class OsmmUpdate:
         #     f_const_iters_value[:] = f_k_plus_one - f_grad_k_plus_one.dot(x_k_plus_one)
         return f_grads_iters_value, f_const_iters_value
 
-    def update_trust_params(self, mu_k, tk, tau_k_plus_one, tau_min, mu_min, mu_max, gamma_inc, gamma_dec):
+    def _update_trust_params(self, mu_k, tk, tau_k_plus_one, tau_min, mu_min, mu_max, gamma_inc, gamma_dec):
         if tk >= 0.99:
             mu_k_plus_one = max(mu_k * gamma_dec, mu_min)
         else:

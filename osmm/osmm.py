@@ -2,17 +2,16 @@ import cvxpy as cp
 import numpy as np
 import torch
 from functools import partial
-
 import time
 import datetime
 
-from osmm_update import OsmmUpdate
-from algmode import *
+from osmm.osmm_update import OsmmUpdate
+from osmm.alg_mode import AlgMode
 
 
 class OSMM:
-    def __init__(self, f_torch, g_cvxpy, get_initial_val, W, W_validate=None, f_hess=None, f_allow_batch=False,
-                 save_timing=False, store_x_all_iters=False):
+    def __init__(self, f_torch, g_cvxpy, get_initial_val, W, W_validate=None, f_hess=None, save_timing=False,
+                 store_x_all_iters=False):
         self.f_torch = f_torch
         self.W_torch = torch.tensor(W, dtype=torch.float, requires_grad=False)
         if W_validate is not None:
@@ -30,28 +29,22 @@ class OSMM:
         except Exception as e:
             self.g_cvxpy = 0 * cp.sum(self.x_var_cvxpy)
         self.get_initial_val = get_initial_val
-        self.f_allow_batch = f_allow_batch
         self.is_save = save_timing
         self.store_x_all_iters = store_x_all_iters
         now = datetime.datetime.now()
-        mmddyyhhmm = ("%d_%d_%d_%d_%d" % (now.month, now.day, now.year, now.hour, now.minute))
-        self.part_of_out_fn = mmddyyhhmm
+        self.mmddyyhhmm = ("%d_%d_%d_%d_%d" % (now.month, now.day, now.year, now.hour, now.minute))
         self.n = self.x_var_cvxpy.size
         self.method_results = {}
 
     def _f(self, x, take_mean=True):
         x_torch = torch.tensor(x, dtype=torch.float, requires_grad=True)
-        if not take_mean and self.f_allow_batch:
-            f_torch = self.f_torch(self.W_torch, x_torch, take_mean=False)
-        else:
-            f_torch = self.f_torch(self.W_torch, x_torch)
+        f_torch = self.f_torch(self.W_torch, x_torch)
         return f_torch, x_torch
 
     def f_value(self, x, take_mean=True):
-        if take_mean:
-            return float(self._f(x)[0])
-        else:
-            return self._f(x, take_mean=False)[0].cpu().detach().numpy()
+        return float(self._f(x)[0])
+        # else:
+        #     return self._f(x, take_mean=False)[0].cpu().detach().numpy()
 
     def f_validate_value(self, x):
         x_torch = torch.tensor(x, dtype=torch.float, requires_grad=True)
@@ -62,30 +55,6 @@ class OSMM:
         f_torch, x_torch = self._f(x)
         f_torch.backward()
         return np.array(x_torch.grad.cpu())
-
-    # def f_Jacobian_value(self, x, w, max_minibatch_size=1000):
-    #     n_w, H_rank = w.shape
-    #     result = np.zeros((self.n, H_rank))
-    #     minibatch_size = min(max_minibatch_size, H_rank)
-    #     minibatch_num = H_rank // minibatch_size
-    #     for j in range(0, minibatch_num):
-    #         w_minibatch = np.array(w[:, j * minibatch_size:(j + 1) * minibatch_size]).reshape((n_w, minibatch_size))
-    #         x_torch = torch.tensor(x, dtype=torch.float)
-    #         x_torch = x_torch.squeeze()
-    #         x_torch = x_torch.repeat(minibatch_size, 1)  ### minibatch_size by n
-    #         x_torch.requires_grad_(True)
-    #         w_torch = torch.tensor(w_minibatch, dtype=torch.float, requires_grad=False) ###
-    #         if self.f_allow_batch:
-    #             f_torch = self.f_torch(w_torch, x_torch.T, take_mean=False)
-    #         else:
-    #             f_torch = torch.zeros(minibatch_size)
-    #             for i in range(minibatch_size):
-    #                 f_torch[i] = self.f_torch(w_torch[:, i].reshape((n_w, 1)), x_torch[i, :])
-    #         jac_objf = f_torch.repeat(minibatch_size, 1).T
-    #         jac_objf.backward(torch.eye(minibatch_size))
-    #         jac_minibatch = np.array(x_torch.grad.data.cpu()).T
-    #         result[:, j * minibatch_size:(j + 1) * minibatch_size] = jac_minibatch
-    #     return result
 
     def f_hess_value(self, x):
         x_torch = torch.tensor(x, dtype=torch.float, requires_grad=True)
@@ -102,11 +71,10 @@ class OSMM:
             f_torch.backward(create_graph=True)
             grad_x = x_torch.grad
             grad_x.requires_grad_(True)
-            # print("grad x", torch.norm(grad_x))
             v = (np.random.rand(self.n) < 0.5) * 2 - 1.0
             v_torch = torch.tensor(v, dtype=torch.float, requires_grad=False)
             gv_objf = torch.matmul(v_torch.T, grad_x)
-            gv_objf.backward()  # retain_graph=True)
+            gv_objf.backward()
             Hv = x_torch.grad.detach().cpu().numpy()
             vTHv = float(v.T.dot(Hv))
             new_est_tr = (est_tr * it + float(vTHv)) / (it + 1)
@@ -118,14 +86,17 @@ class OSMM:
         print("Hutchinson #iters", it, "rel. incr.", np.abs(new_est_tr - est_tr) / np.abs(est_tr), "est. tr.", est_tr)
         return est_tr
 
-    def solve(self, max_num_rounds=100, alg_mode=AlgMode.LowRankNewSampPlusBundle,
-              H_rank=20, M=20, solver="ECOS", tau_min=1e-3, mu_min=1e-4, mu_max=1e5, mu_0=1.0,
-              gamma_inc=1.1, gamma_dec=0.8, ini_by_Hutchison=True,
-              alpha=0.05, beta=0.5, j_max=10, ep=1e-15,
-              minibatch_size=None, H_0_min=1e-5, num_samples_Jacobian=10, num_iter_eval_Lk=10):
+    def solve(self, max_num_rounds=100, alg_mode=AlgMode.LowRankQNBundle,
+              H_rank=20, M=20, solver="ECOS", ini_by_Hutchison=True, stop_early=True, num_iter_eval_Lk=10,
+              tau_min=1e-3, mu_min=1e-4, mu_max=1e5, mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8,
+              alpha=0.05, beta=0.5, j_max=10, ep=1e-15):
 
-        if num_samples_Jacobian < H_rank:
-            num_samples_Jacobian = H_rank
+        if alg_mode == AlgMode.Exact or alg_mode == AlgMode.BFGSBundle:
+            H_rank = self.n
+        if H_rank == 0:
+            alg_mode = AlgMode.Bundle
+            H_rank = 20
+
         if self.store_x_all_iters:
             self.method_results["X_iters"] = np.zeros((self.n, max_num_rounds))
         else:
@@ -150,15 +121,9 @@ class OSMM:
 
         subprob, x_k, objf_k, objf_validation_k, f_k, f_grad_k, g_k, lam_k, f_grads_iters_value, f_const_iters_value, \
         G_k, diag_H_k \
-            = osmm_method.initialization(H_rank, M, alg_mode, tau_min, ini_by_Hutchison, H_0_min,
-                                         minibatch_size, num_samples_Jacobian)
-
-        round_idx = 1
-        lbfgs_update_round_idx = 1
+            = osmm_method.initialization(H_rank, M, alg_mode, tau_min, ini_by_Hutchison)
         lower_bound_k = -np.inf
         mu_k = mu_0
-        S_lbfgs = np.zeros((self.n, H_rank))
-        Y_lbfgs = np.zeros((self.n, H_rank))
 
         self.method_results["X_iters"][:, 0] = x_k
         self.method_results["objf_iters"][0] = objf_k
@@ -169,20 +134,20 @@ class OSMM:
             self.method_results["x_best"] = x_k
 
         update_func = partial(osmm_method.update_func, alg_mode=alg_mode, H_rank=H_rank, pieces_num=M, solver=solver,
-                              num_samples_Jacobian=num_samples_Jacobian, minibatch_size=minibatch_size,
                               mu_min=mu_min, tau_min=tau_min, mu_max=mu_max, ep=ep,
                               gamma_inc=gamma_inc, gamma_dec=gamma_dec,
                               beta=beta, j_max=j_max, alpha=alpha, num_iter_eval_Lk=num_iter_eval_Lk)
 
-        while round_idx < max_num_rounds:
+        round_idx = 1
+        stopping_criteria_satisfied = False
+        while round_idx < max_num_rounds and (not stop_early or round_idx < 10 or not stopping_criteria_satisfied):
             start_time = time.time()
 
-            x_k_plus_one, objf_k_plus_one, g_k_plus_one, lower_bound_k_plus_one, f_grad_k_plus_one,\
-            f_grads_iters_value, f_const_iters_value, G_k_plus_one, diag_H_k_plus_one, lam_k_plus_one, mu_k_plus_one,\
-            Y_lbfgs, S_lbfgs, lbfgs_update_round_idx \
-                = update_func(subprob, round_idx, objf_k, g_k, lower_bound_k, f_grad_k,
-                              f_grads_iters_value, f_const_iters_value, G_k, diag_H_k, lam_k, mu_k,
-                              Y_lbfgs, S_lbfgs, lbfgs_update_round_idx)
+            stopping_criteria_satisfied, x_k_plus_one, objf_k_plus_one, g_k_plus_one, lower_bound_k_plus_one, \
+            f_grad_k_plus_one, f_grads_iters_value, f_const_iters_value, G_k_plus_one, diag_H_k_plus_one, \
+            lam_k_plus_one, mu_k_plus_one = update_func(subprob, round_idx, objf_k, g_k, lower_bound_k, f_grad_k,
+                                                        f_grads_iters_value, f_const_iters_value, G_k, diag_H_k, lam_k,
+                                                        mu_k)
 
             end_time = time.time()
             runtime = end_time - start_time
