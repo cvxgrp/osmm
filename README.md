@@ -1,5 +1,9 @@
 # osmm
-`osmm` is a Python package for oracle-structured minimization method.
+`osmm` is a Python package for oracle-structured minimization method, which solves problems in the following form
+```
+minimize f(x, W) + g(x),
+```
+where `x` is the variable, and `W` is a given data matrix. The oracle function `f` is defined by Pytorch, and the structured function `g` is defined by cvxpy.
 
 The implementation is based on our paper XXX.
 
@@ -12,15 +16,8 @@ python setup.py install
 `osmm` requires
 * [cvxpy](https://github.com/cvxgrp/cvxpy) >= 1.1.0a4
 * [PyTorch](https://pytorch.org/) >= 1.6.0
+* Python 3.x
 
-
-The implementation is for problems in the following form
-```
-minimize f(x, W) + g(x),
-```
-where `x` is the variable, and `W` is a given data matrix.
-The user defines `f` by PyTorch, `g` by CVXPY, and an initial point of `x` in the domain of `f`. 
-Then by calling the `solve` method in the package, a solution is automatically generated.
 
 ### Usage
 
@@ -31,19 +28,12 @@ Then by calling the `solve` method in the package, a solution is automatically g
 #### Example
 We take the following Kelly gambling problem as an example
 ```
-minimize - E[log(w^T x)]
-subject to x >= 0, x^T 1 = 1,
-```
-where `x` is an `n` dimensional variable, and the expectation is w.r.t. random variable `w`.
-Approximating the expectation with a finite sum, the problem that we solve is
-```
 minimize - \sum_{i=1}^n [log(w_i^T x)] / N
 subject to x >= 0, x^T 1 = 1,
 ```
-where `w_i` for `i=1,...,N` are given data samples.
-The objective function and the indicator function of the constraints correspond to functions `f` and `g`, respectively.
+where `x` is an `n` dimensional variable, and `w_i` for `i=1,...,N` are given data samples.
 
-The user implements the function `f` by PyTorch and the function `g` by CVXPY as follows.
+The user implements the objective function as `f` by PyTorch and the indicator function of the constraints as `g` by cvxpy.
 ```python
 def my_f_torch(w_torch, x_torch):
     objf = -torch.mean(torch.log(torch.matmul(w_torch.T, b_torch)))
@@ -64,7 +54,7 @@ Next, with a given `n` by `N` data matrix `W`, the user can define an `OSMM` obj
 ```python
 osmm_prob = OSMM(my_f_torch, my_cvxpy_description, my_initial_val, W)
 ```
-The user can call the solve method by
+The solve method is called by
 ```python
 osmm_prob.solve()
 ```
