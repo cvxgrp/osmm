@@ -20,18 +20,36 @@ python setup.py install
 
 
 ### Usage
-`osmm` exposes the `OSMM` object 
+`osmm` exposes the `OSMM` class 
 ```python
 OSMM(f_torch, g_cvxpy, get_initial_val, W, W_validate=None)
 ```
-and its solve method
+which generates an object defining the problem, 
+and a member function of the `OSMM` class
 ```python
-OSMM.solve(max_num_rounds=100, H_rank=20, M=20, solver="ECOS", ini_by_Hutchison=True, stop_early=True, alg_mode=AlgMode.LowRankQNBundle, num_iter_eval_Lk=10, tau_min=1e-3, mu_min=1e-4, mu_max=1e5, mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8, alpha=0.05, beta=0.5, j_max=10)
+solve(solver="ECOS", max_num_rounds=100, r=20, M=20)
 ```
+which runs the solve method.
 
 #### Arguments
+The arguments `f_torch`, `g_cvxpy`, `get_initial_val`, `W`, and `W_validate` define the problem.
+* `f_torch` must be a function with two inputs and one output. The first and the second inputs are the PyTorch tensors for the data matrix `W` and the variable vector `x`, respectively. The output is a PyTorch tensor for the scalar function value of `f`.
+* `g_cvxpy` must be a function with no input and three outputs. The first output is a cvxpy variable for `x`, the second one is a cvxpy expression for the objective function in `g`, and the third one is a list of constraints contained in `g`.
+* `get_initial_val` must be a function with no input and one output, which is a numpy array for an initial value of `x`.
+* `W` must be a numpy matrix with dimension `n` by `N`, where `n` is the dimension of `x`.
+* `W_validate` is another numpy matrix with dimension `n` by `N` which serves as a validation dataset.
+
+There are some arguments for the `solve` method. They all have default values, and are not required to be provided by the user.
+* `solver` must be one of the solvers supported by cvxpy.
+* `max_num_rounds` is the maximum number of iterations.
+* `r` and `M` are the rank and memory parameters in the method. Please see the paper for details on them.
 
 #### Return value
+Results after solving are stored in the dictonary `method_results` which is an attribute of an `OSMM` object.
+* `"x_best"` stores the solution of `x`.
+* `"objf_iters"` stores the objective values during the iterations.
+* `"lower_bound_iters"` stores lower bounds on the optimal objective value during the iterations.
+* `"iters_taken"` stores the actual number of iterations taken.
 
 #### Example
 We take the following Kelly gambling problem as an example
