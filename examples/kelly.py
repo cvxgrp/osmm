@@ -1,26 +1,31 @@
-import autograd.numpy as np
+import torch
+import numpy as np
 import cvxpy as cp
 from mosek.fusion import *
-import torch
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import time
+# import sys; sys.path.insert(0, '..')
+# from osmm.osmm import OSMM
+from osmm import OSMM
+
+CPU = torch.device('cpu')
+if torch.cuda.is_available():
+    torch.set_default_tensor_type(torch.cuda.FloatTensor)
+    device = torch.device('cuda')
+else:
+    torch.set_default_tensor_type(torch.FloatTensor)
+    device = CPU
+print("device =", device)
+np.random.seed(0)
+np.seterr(all='raise')
 
 
-n = 120 + 45 + 10 + 1
-N = 10000
-n_w = n
-
-num_horses = 10
-place_count = np.array([num_horses - 1 - i for i in range(num_horses - 1)])
-show_count_0 = np.array([(num_horses - 1 - i) * (num_horses - 2 - i) / 2 for i in range(num_horses - 2)])
-show_count_1 = np.array([num_horses - 2 - i for i in range(num_horses - 2)])  # 8,7,...,1
-
-mu = [1, 1, 1.5, 2.0, 3.0, 3.0, 13.5, 3.8, 4.0, 4.0]
-sigma = [0.5, 0.8, 0.8, 0.5, 0.9, 1.0, 1.0, 1.1, 0.9, 1.2]
-
-
-def generate_unit_payoff(N_payoff):
+def generate_unit_payoff(N_payoff, num_horses, mu, sigma):
+    n = 1 + num_horses + num_horses * (num_horses - 1) // 2 + num_horses * (num_horses - 1) * (num_horses - 2) // 6
+    place_count = np.array([num_horses - 1 - i for i in range(num_horses - 1)])
+    show_count_0 = np.array([(num_horses - 1 - i) * (num_horses - 2 - i) / 2 for i in range(num_horses - 2)])
+    show_count_1 = np.array([num_horses - 2 - i for i in range(num_horses - 2)])  # 8,7,...,1
     finish_time = np.zeros((num_horses, N_payoff))
     for i in range(num_horses):
         finish_time[i, :] = np.random.randn(N_payoff) * sigma[i] + mu[i]
@@ -43,10 +48,10 @@ def generate_unit_payoff(N_payoff):
     return payoff
 
 
-payoff = generate_unit_payoff(N)
-
-
-def generate_horse_race_return():
+def generate_random_data(N, num_horses, mu, sigma, payoff):
+    place_count = np.array([num_horses - 1 - i for i in range(num_horses - 1)])
+    show_count_0 = np.array([(num_horses - 1 - i) * (num_horses - 2 - i) / 2 for i in range(num_horses - 2)])
+    show_count_1 = np.array([num_horses - 2 - i for i in range(num_horses - 2)])  # 8,7,...,1
     # generate outcomes
     finish_time = np.zeros((num_horses, N))
     for i in range(num_horses):
@@ -71,19 +76,31 @@ def generate_horse_race_return():
     return np.concatenate([win_bets_return, place_bets_return, show_bets_retrun, np.ones((1, N))])
 
 
-def get_initial_val_kelly():
+N = 10000
+num_horses = 10
+n = 1 + num_horses + num_horses * (num_horses - 1) // 2 + num_horses * (num_horses - 1) * (num_horses - 2) // 6
+n_w = n
+mu = [1, 1, 1.5, 2.0, 3.0, 3.0, 13.5, 3.8, 4.0, 4.0]
+sigma = [0.5, 0.8, 0.8, 0.5, 0.9, 1.0, 1.0, 1.1, 0.9, 1.2]
+payoff = generate_unit_payoff(N, num_horses, mu, sigma)
+
+W = generate_random_data(N, num_horses, mu, sigma, payoff)
+W_validation = generate_random_data(N, num_horses, mu, sigma, payoff)
+
+
+def get_initial_val():
     ini = np.ones(n) / n
     return ini
 
 
-def get_cvxpy_description_kelly():
+def get_cvxpy_description():
     b_var = cp.Variable(n, nonneg=True)
     g = 0
     constr = [cp.sum(b_var) == 1]
     return b_var, g, constr
 
 
-def my_objf_torch_kelly(r_torch=None, b_torch=None, take_mean=True):
+def my_objf_torch(r_torch=None, b_torch=None, take_mean=True):
     if b_torch.shape == torch.Size([n]):
         tmp = torch.matmul(r_torch.T, b_torch)
     else:
@@ -95,15 +112,14 @@ def my_objf_torch_kelly(r_torch=None, b_torch=None, take_mean=True):
     return objf
 
 
-# def my_hess_kelly(b, r):
-#     n, m = r.shape
-#     temp = r.T.dot(b)
-#     tmp = np.divide(r, temp)
-#     return tmp.dot(tmp.T) / m
+osmm_prob = OSMM(f_torch=my_objf_torch, g_cvxpy=get_cvxpy_description, get_initial_val=get_initial_val,
+                 W=W, W_validate=W)
+osmm_prob.solve()
 
 
 #########################################################################
-def get_baseline_soln_kelly(R, compare_with_all=False):
+### baseline and plot
+def get_baseline_soln_cvxpy(R, compare_with_all=False):
     b_baseline_var = cp.Variable(n, nonneg=True)
     obj_baseline = -cp.sum(cp.log(R.T @ b_baseline_var)) / N
     b_baseline_var.value = np.ones(n) / n
@@ -155,7 +171,7 @@ def get_baseline_soln_kelly_mosek(R):
     return b_baseline_var.level(), np.sum(z.level()) / N
 
 
-def my_plot_kelly_one_result(W, x_best, is_save_fig=False, figname="kelly.pdf"):
+def my_plot_one_result(W, x_best, is_save_fig=False, figname="kelly.pdf"):
     linewidth = 2
     fontsize = 14
 
