@@ -20,6 +20,14 @@ python setup.py install
 
 
 ### Usage
+`osmm` exposes the `OSMM` object 
+```python
+OSMM(f_torch, g_cvxpy, get_initial_val, W, W_validate=None)
+```
+and its solve method
+```python
+OSMM.solve(max_num_rounds=100, H_rank=20, M=20, solver="ECOS", ini_by_Hutchison=True, stop_early=True, alg_mode=AlgMode.LowRankQNBundle, num_iter_eval_Lk=10, tau_min=1e-3, mu_min=1e-4, mu_max=1e5, mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8, alpha=0.05, beta=0.5, j_max=10)
+```
 
 #### Arguments
 
@@ -28,15 +36,18 @@ python setup.py install
 #### Example
 We take the following Kelly gambling problem as an example
 ```
-minimize - \sum_{i=1}^n [log(w_i^T x)] / N
-subject to x >= 0, x^T 1 = 1,
+minimize - \sum_{i=1}^N [log(w_i'x)] / N
+subject to x >= 0, x'1 = 1,
 ```
 where `x` is an `n` dimensional variable, and `w_i` for `i=1,...,N` are given data samples.
 
-The user implements the objective function as `f` by PyTorch and the indicator function of the constraints as `g` by cvxpy.
+The user implements the objective function as `f` by PyTorch and the indicator function of the constraints as `g` by cvxpy,
+and gives an initial value of `x` which is in the domain of `f`.
 ```python
+n = 100
+
 def my_f_torch(w_torch, x_torch):
-    objf = -torch.mean(torch.log(torch.matmul(w_torch.T, b_torch)))
+    objf = -torch.mean(torch.log(torch.matmul(w_torch.T, x_torch)))
     return objf
     
 def my_cvxpy_description():
@@ -44,9 +55,7 @@ def my_cvxpy_description():
     g = 0
     constr = [cp.sum(x_var) == 1]
     return x_var, g, constr
-```
-Then the user gives an initial value of `x` which is in the domain of `f`.
-```python
+    
 def my_initial_val():
     return np.ones(n) / n
 ```
