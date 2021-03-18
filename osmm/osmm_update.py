@@ -2,9 +2,9 @@ import numpy as np
 import cvxpy as cp
 import time
 
-from osmm.subproblem import Subproblem
-from osmm.curvature_updates import CurvatureUpdate
-from osmm.alg_mode import AlgMode
+from .subproblem import Subproblem
+from .curvature_updates import CurvatureUpdate
+from .alg_mode import AlgMode
 
 
 class OsmmUpdate:

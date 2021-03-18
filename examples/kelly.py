@@ -3,18 +3,12 @@ import cvxpy as cp
 from mosek.fusion import *
 import torch
 import matplotlib.gridspec as gridspec
-import matplotlib
 import matplotlib.pyplot as plt
-matplotlib.rcParams['pdf.fonttype'] = 42
-matplotlib.rcParams['ps.fonttype'] = 42
-import seaborn as sns
-sns.set(style="ticks")
 import time
 
-from plot_convergence_curves import get_best_x
 
 n = 120 + 45 + 10 + 1
-N = 1000000
+N = 10000
 n_w = n
 
 num_horses = 10
@@ -82,6 +76,33 @@ def get_initial_val_kelly():
     return ini
 
 
+def get_cvxpy_description_kelly():
+    b_var = cp.Variable(n, nonneg=True)
+    g = 0
+    constr = [cp.sum(b_var) == 1]
+    return b_var, g, constr
+
+
+def my_objf_torch_kelly(r_torch=None, b_torch=None, take_mean=True):
+    if b_torch.shape == torch.Size([n]):
+        tmp = torch.matmul(r_torch.T, b_torch)
+    else:
+        tmp = torch.sum(r_torch * b_torch, axis=0)
+    if take_mean:
+        objf = -torch.mean(torch.log(tmp))
+    else:
+        objf = -torch.log(tmp)
+    return objf
+
+
+# def my_hess_kelly(b, r):
+#     n, m = r.shape
+#     temp = r.T.dot(b)
+#     tmp = np.divide(r, temp)
+#     return tmp.dot(tmp.T) / m
+
+
+#########################################################################
 def get_baseline_soln_kelly(R, compare_with_all=False):
     b_baseline_var = cp.Variable(n, nonneg=True)
     obj_baseline = -cp.sum(cp.log(R.T @ b_baseline_var)) / N
@@ -134,44 +155,9 @@ def get_baseline_soln_kelly_mosek(R):
     return b_baseline_var.level(), np.sum(z.level()) / N
 
 
-def get_cvxpy_description_kelly():
-    b_var = cp.Variable(n, nonneg=True)
-    g = 0 * cp.sum(b_var)
-    constr = [cp.sum(b_var) == 1, b_var >= 0]
-    return b_var, g, constr
-
-
-def my_objf_torch_kelly(r_torch=None, b_torch=None, take_mean=True):
-    if b_torch.shape == torch.Size([n]):
-        tmp = torch.matmul(r_torch.T, b_torch)
-    else:
-        tmp = torch.sum(r_torch * b_torch, axis=0)
-    if take_mean:
-        objf = -torch.mean(torch.log(tmp))
-    else:
-        objf = -torch.log(tmp)
-    return objf
-
-
-def my_hess_kelly(b, r):
-    n, m = r.shape
-    temp = r.T.dot(b)
-    # temp = np.maximum(temp, 1e-10)
-    tmp = np.divide(r, temp)
-    return tmp.dot(tmp.T) / m
-
-
-#########################################################################
-def my_plot_kelly_one_result(W, xs, objfs, is_save_fig=False, figname="kelly.pdf"):
+def my_plot_kelly_one_result(W, x_best, is_save_fig=False, figname="kelly.pdf"):
     linewidth = 2
     fontsize = 14
-
-    num_trials, _, num_iters = objfs.shape
-    _, _, _, saved_num_iters = xs.shape
-    if num_iters == saved_num_iters:
-        x_best, _ = get_best_x(objfs, xs, trial_idx=0)
-    else:
-        x_best, _ = get_best_x(objfs[:, :, num_iters - saved_num_iters:num_iters], xs, trial_idx=0)
 
     outcomes_count = np.zeros(n - 1)
     for i in range(N):
@@ -192,14 +178,12 @@ def my_plot_kelly_one_result(W, xs, objfs, is_save_fig=False, figname="kelly.pdf
     axins.set_xlabel("Candidate Index")
     a.indicate_inset_zoom(axins)
     a.set_ylim([0, 0.6])
-    a.grid()
 
     b = fig.add_subplot(gs[0, 1])
     b.stem([i for i in range(n)], x_best, markerfmt=' ')
     b.set_ylabel("Investment", fontsize=fontsize)
     b.set_xlabel("Bet Index", fontsize=fontsize)
     b.set_yscale("log")
-    b.grid()
 
     payoff_outcomes = np.log(W.T.dot(x_best))
     c = fig.add_subplot(gs[0, 2])
@@ -210,7 +194,6 @@ def my_plot_kelly_one_result(W, xs, objfs, is_save_fig=False, figname="kelly.pdf
     print("mean", payoff_outcomes.mean())
     c.set_ylabel("Number of Samples", fontsize=fontsize)
     c.set_xlabel("Log Return", fontsize=fontsize)
-    c.grid()
     #####################################################################
     if is_save_fig:
         fig.savefig(figname)

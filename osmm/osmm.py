@@ -5,8 +5,8 @@ from functools import partial
 import time
 import datetime
 
-from osmm.osmm_update import OsmmUpdate
-from osmm.alg_mode import AlgMode
+from .osmm_update import OsmmUpdate
+from .alg_mode import AlgMode
 
 
 class OSMM:
