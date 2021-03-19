@@ -87,15 +87,15 @@ class OSMM:
         return est_tr
 
     def solve(self, max_num_rounds=100, alg_mode=AlgMode.LowRankQNBundle,
-              H_rank=20, M=20, solver="ECOS", ini_by_Hutchison=True, stop_early=True, num_iter_eval_Lk=10,
+              r=20, M=20, solver="ECOS", ini_by_Hutchison=True, stop_early=True, num_iter_eval_Lk=10,
               tau_min=1e-3, mu_min=1e-4, mu_max=1e5, mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8,
               alpha=0.05, beta=0.5, j_max=10, ep=1e-15):
 
         if alg_mode == AlgMode.Exact or alg_mode == AlgMode.BFGSBundle:
-            H_rank = self.n
-        if H_rank == 0:
+            r = self.n
+        if r == 0:
             alg_mode = AlgMode.Bundle
-            H_rank = 20
+            r = 20
 
         if self.store_x_all_iters:
             self.method_results["X_iters"] = np.zeros((self.n, max_num_rounds))
@@ -121,7 +121,7 @@ class OSMM:
 
         subprob, x_k, objf_k, objf_validation_k, f_k, f_grad_k, g_k, lam_k, f_grads_iters_value, f_const_iters_value, \
         G_k, diag_H_k \
-            = osmm_method.initialization(H_rank, M, alg_mode, tau_min, ini_by_Hutchison)
+            = osmm_method.initialization(r, M, alg_mode, tau_min, ini_by_Hutchison)
         lower_bound_k = -np.inf
         mu_k = mu_0
 
@@ -133,7 +133,7 @@ class OSMM:
         if objf_k < np.inf:
             self.method_results["x_best"] = x_k
 
-        update_func = partial(osmm_method.update_func, alg_mode=alg_mode, H_rank=H_rank, pieces_num=M, solver=solver,
+        update_func = partial(osmm_method.update_func, alg_mode=alg_mode, H_rank=r, pieces_num=M, solver=solver,
                               mu_min=mu_min, tau_min=tau_min, mu_max=mu_max, ep=ep,
                               gamma_inc=gamma_inc, gamma_dec=gamma_dec,
                               beta=beta, j_max=j_max, alpha=alpha, num_iter_eval_Lk=num_iter_eval_Lk)

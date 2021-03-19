@@ -1,30 +1,31 @@
+import torch
 import autograd.numpy as np
 import cvxpy as cp
 from mosek.fusion import *
-
-import matplotlib
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
-import torch
-
-from plot_convergence_curves import get_best_x
-
-matplotlib.rcParams['pdf.fonttype'] = 42
-matplotlib.rcParams['ps.fonttype'] = 42
-import seaborn as sns
-
-sns.set(style="ticks")
 import matplotlib.patches as mpatches
 import time
+from osmm import OSMM
 
-n_product = 40
+CPU = torch.device('cpu')
+if torch.cuda.is_available():
+    torch.set_default_tensor_type(torch.cuda.FloatTensor)
+    device = torch.device('cuda')
+else:
+    torch.set_default_tensor_type(torch.FloatTensor)
+    device = CPU
+print("device =", device)
+np.random.seed(0)
+np.seterr(all='raise')
+
+n_product = 1000
 n = n_product + 1
-N = 100000
+N = 10000
 n_w = 2 * n_product
-B = np.random.uniform(low=0, high=0.1, size=(n_product, n_product))
+B = np.random.uniform(low=0, high=0.02, size=(n_product, n_product))
 A = B.dot(B.T)
 cost_bound = 1.0
-th = -0.0
 eta = 0.5
 
 mean_return1 = .05  # 1.25
@@ -47,7 +48,7 @@ prob1 = .5
 prob2 = .5
 
 
-def generate_log_normal_demand_price():
+def generate_random_data():
     # draw batch returns
     def draw_batch_returns(N_DRAWS):
         result = np.vstack([
@@ -61,10 +62,41 @@ def generate_log_normal_demand_price():
     return learning_sample.T
 
 
-def get_initial_val_news_vendor():
+def get_initial_val():
     return np.ones(n)
 
 
+W = generate_random_data()
+W_validation = generate_random_data()
+
+
+def get_cvxpy_description():
+    q_var = cp.Variable(n)
+    g = 0
+    constr = [cp.square(cp.norm(B.T @ q_var[0:n_product])) <= cost_bound, q_var[0:n-1] >= 0, q_var[n-1] >= 1e-10]
+    return q_var, g, constr
+
+
+def my_objf_torch(w_torch=None, q_torch=None, take_mean=True):
+    if take_mean == False:
+        print("take_mean must be true")
+        return None
+    _, batch_size = w_torch.shape
+    d_torch = w_torch[0:n_w // 2, :]
+    p_torch = w_torch[n_w // 2:n_w, :]
+    B_torch = torch.tensor(B, dtype=torch.float)
+    phi = torch.square(torch.norm(torch.matmul(B_torch.T, q_torch[0:n_product])))
+    profits = torch.sum(p_torch * torch.min(d_torch, q_torch[0:n_product, None]), axis=0) - phi
+    objf = q_torch[n - 1] * torch.logsumexp(-profits / q_torch[n - 1] - np.log(batch_size) - np.log(1 - eta), 0)
+    return objf
+
+osmm_prob = OSMM(f_torch=my_objf_torch, g_cvxpy=get_cvxpy_description, get_initial_val=get_initial_val,
+                 W=W, W_validate=W_validation)
+osmm_prob.solve(solver="MOSEK")
+
+
+#########################################################################
+### baseline and plot
 def get_baseline_soln_news_vendor(W, compare_with_all=False):
     print("in baseline solver")
     D = W[0:n_w // 2, :]
@@ -76,7 +108,7 @@ def get_baseline_soln_news_vendor(W, compare_with_all=False):
     z = cp.Variable(N, nonneg=True)
     profits = cp.Variable(N)
 
-    cost = cp.quad_form(q_baseline_var, A)
+    cost = cp.square(cp.norm(B.T @ q_baseline_var))
     sales = cp.vstack([cp.minimum(D[i, :], q_baseline_var[i]) for i in range(n_product)])  # n_w by N
     revenues = cp.sum(cp.multiply(P, sales), axis=0)  # N
 
@@ -145,42 +177,9 @@ def get_baseline_soln_news_vendor_mosek(W):
     return np.concatenate([q_baseline_var.level(), a_baseline_var.level()]), u.level()
 
 
-def get_cvxpy_description_news_vendor():
-    q_var = cp.Variable(n)
-    g = 0 * cp.sum(q_var)
-    constr = [cp.quad_form(q_var[0:n_product], A) <= cost_bound, q_var[0:n - 1] >= 0, q_var[n - 1] >= 1e-8]
-    return q_var, g, constr
-
-
-def my_objf_torch_news_vendor(w_torch=None, q_torch=None, take_mean=True):
-    if take_mean == False:
-        print("take_mean must be true")
-        return None
-    _, batch_size = w_torch.shape
-    d_torch = w_torch[0:n_w // 2, :]
-    p_torch = w_torch[n_w // 2:n_w, :]
-    A_torch = torch.tensor(A, dtype=torch.float)  # , device=cuda)
-
-    if q_torch.shape == torch.Size([n]):
-        phi = torch.matmul(q_torch[0:n_product], torch.matmul(A_torch, q_torch[0:n_product].T))
-        profits = torch.sum(p_torch * torch.min(d_torch, q_torch[0:n_product, None]), axis=0) - phi
-    else:  # q_torch was m by n, but now becomes n by m
-        phi = torch.sum(q_torch[0:n_product] * torch.matmul(A_torch, q_torch[0:n_product]), axis=0)
-        profits = torch.sum(p_torch * torch.min(d_torch, q_torch[0:n_product]), axis=0) - phi
-    objf = q_torch[n - 1] * torch.logsumexp((-profits - th) / q_torch[n - 1] - np.log(batch_size) - np.log(1 - eta), 0)
-    return objf
-
-
-def my_plot_newsvendor_one_result(W, xs, objfs, is_save_fig=False, figname="newsvendor.pdf"):
+def my_plot_newsvendor_one_result(W, x_best, is_save_fig=False, figname="newsvendor.pdf"):
     linewidth = 2
     fontsize = 14
-
-    num_trials, _, num_iters = objfs.shape
-    _, _, _, saved_num_iters = xs.shape
-    if num_iters == saved_num_iters:
-        x_best, _ = get_best_x(objfs, xs, trial_idx=0)
-    else:
-        x_best, _ = get_best_x(objfs[:, :, num_iters - saved_num_iters:num_iters], xs, trial_idx=0)
 
     fig = plt.figure(tight_layout=True, figsize=(12, 6))
     gs = gridspec.GridSpec(1, 2)

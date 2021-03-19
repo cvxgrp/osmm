@@ -1,23 +1,27 @@
+import torch
 import autograd.numpy as np
 import cvxpy as cp
-import torch
 from scipy.stats import multivariate_normal
-
 import numpy.polynomial as polynomial
-
-from plot_convergence_1trial_1alg import get_best_x
 import matplotlib.gridspec as gridspec
-import matplotlib
 import matplotlib.pyplot as plt
-matplotlib.rcParams['pdf.fonttype'] = 42
-matplotlib.rcParams['ps.fonttype'] = 42
-import seaborn as sns
-sns.set(style="ticks")
 import time
+from osmm import OSMM
+
+CPU = torch.device('cpu')
+if torch.cuda.is_available():
+    torch.set_default_tensor_type(torch.cuda.FloatTensor)
+    device = torch.device('cuda')
+else:
+    torch.set_default_tensor_type(torch.FloatTensor)
+    device = CPU
+print("device =", device)
+np.random.seed(0)
+np.seterr(all='raise')
 
 
-N_0 = 1000000
-lam_reg = 0#1e-6
+N_0 = 10000
+lam_reg = 1e-4
 
 d = 2
 m = 2000
@@ -36,12 +40,10 @@ y = np.vstack([
     np.random.multivariate_normal(mu3, Sigma3, size=int(m * prob3))
     ]).T
 
-print("max abs y before normalization", np.max(np.abs(y)))
 y = y / np.max(np.abs(y)) #normalized to [-1, 1]^2
 
 y_mean = np.mean(y, axis=1)
 y_cov = np.cov(y - y_mean[:, None])
-print("y cov", y_cov.shape, y_cov)
 
 degree = 4
 n = int((degree + 1) * (degree + 2) / 2 - 1)
@@ -97,7 +99,7 @@ D_reg = Dphi()
 n_w = n + 1
 
 
-def generate_random_samples_exp_density():
+def generate_random_data():
     z = np.random.multivariate_normal(y_mean, y_cov * 1.1, N_0)
     z_inf_norms = np.max(np.abs(z), axis=1)
     z_acc = z[z_inf_norms <= 1, :]
@@ -111,6 +113,35 @@ def generate_random_samples_exp_density():
     return W
 
 
+W = generate_random_data()
+W_validation = generate_random_data()
+
+
+def get_initial_val():
+    return np.ones(n) / n
+
+
+def get_cvxpy_description():
+    theta_var = cp.Variable(n)
+    g = lam_reg * cp.quad_form(theta_var, D_reg)
+    constr = []
+    return theta_var, g, constr
+
+
+def my_objf_torch(w_torch=None, theta_torch=None):
+    _, batch_size = w_torch.shape
+    phi_z_torch = w_torch[0:n, :]
+    log_pi_z_torch = w_torch[n_w - 1, :]
+    A_theta = torch.logsumexp(torch.matmul(-phi_z_torch.T, theta_torch) + log_pi_z_torch, 0)
+    return A_theta + torch.matmul(theta_torch.T,  torch.tensor(c / m, dtype=torch.float))
+
+
+osmm_prob = OSMM(f_torch=my_objf_torch, g_cvxpy=get_cvxpy_description, get_initial_val=get_initial_val,
+                 W=W, W_validate=W_validation)
+osmm_prob.solve(solver="MOSEK")
+
+#########################################################################
+### baseline and plot
 def get_baseline_soln_exp_density(W, compare_with_all=False):
     phi_z = W[0:n, :]
     log_pi_z = W[n_w - 1, :]
@@ -151,37 +182,14 @@ def get_baseline_soln_exp_density(W, compare_with_all=False):
     return theta_var_baseline.value, prob_baseline_val, mosek_solve_time
 
 
-def get_initial_val_exp_density():
-    return np.ones(n) / n
-
-
-def get_cvxpy_description_exp_density():
-    theta_var = cp.Variable(n)
-    g = 0 * cp.sum(theta_var) + lam_reg * cp.quad_form(theta_var, D_reg)
-    constr = []
-    return theta_var, g, constr
-
-
-def my_objf_torch_exp_density(w_torch=None, theta_torch=None, take_mean=True):
-    _, batch_size = w_torch.shape
-    phi_z_torch = w_torch[0:n, :]
-    log_pi_z_torch = w_torch[n_w - 1, :]
-    A_theta = torch.logsumexp(torch.matmul(-phi_z_torch.T, theta_torch) + log_pi_z_torch, 0)
-    return A_theta + torch.matmul(theta_torch.T,  torch.tensor(c / m, dtype=torch.float))
-
-
-def my_plot_exp_density_one_result(W, xs, objfs, is_save_fig=False, figname="exp_density.pdf"):
+def my_plot_exp_density_one_result(Xs, objfs, iters_taken, is_save_fig=False, figname="exp_density.pdf"):
     font = {'family': 'serif',
             'size': 16,
             }
 
-    num_trials, _, num_iters = objfs.shape
-    _, _, _, saved_num_iters = xs.shape
-    if num_iters == saved_num_iters:
-        x_best, objf_best = get_best_x(objfs, xs, trial_idx=0)
-    else:
-        x_best, objf_best = get_best_x(objfs[:, :, num_iters - saved_num_iters:num_iters], xs, trial_idx=0)
-
+    best_iter = np.argmin(objfs[0:iters_taken])
+    x_best = Xs[:, best_iter]
+    objf_best = objfs[best_iter]
     A_theta_value = objf_best - c.T.dot(x_best) / m
 
     plt.rcParams.update({'font.size': 16})
@@ -207,8 +215,6 @@ def my_plot_exp_density_one_result(W, xs, objfs, is_save_fig=False, figname="exp
     a.scatter(y[0, :], y[1, :], alpha=0.5, s=0.1)
     a.tick_params(labelsize=16)
 
-    # a.scatter([grid[i][0] for i in range(grid_num ** 2)], [grid[i][1] for i in range(grid_num ** 2)])
-
     # ####################################################################
     c_fig = fig.add_subplot(gs[0, 1], projection='3d')
     c_fig.plot_surface(X, Y, np.exp(np.maximum(-20, log_prob - A_theta_value)))
@@ -216,11 +222,6 @@ def my_plot_exp_density_one_result(W, xs, objfs, is_save_fig=False, figname="exp
     c_fig.tick_params(labelsize=16)
     plt.xticks(np.array([-1, -0.5, 0.0, 0.5, 1.0]), [-1, -0.5, 0.0, 0.5, 1.0])
     plt.yticks(np.array([-1, -0.5, 0.0, 0.5, 1.0]), [-1, -0.5, 0.0, 0.5, 1.0])
-
-    # ###################################################################
-    # b = fig.add_subplot(gs[0, 2])
-    # b.stem([i for i in range(0, n)], x_best, markerfmt=" ", label="Estimated " + r"$\theta_i$")
-    # b.legend()
 
     #####################################################################
     if is_save_fig:

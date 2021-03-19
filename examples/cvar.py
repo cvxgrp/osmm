@@ -1,47 +1,25 @@
-import autograd.numpy as np
+import torch
+import numpy as np
 import cvxpy as cp
 from mosek.fusion import *
-
-import torch
-from plot_convergence_curves import get_best_x
 import matplotlib.gridspec as gridspec
-import matplotlib
 import matplotlib.pyplot as plt
-matplotlib.rcParams['pdf.fonttype'] = 42
-matplotlib.rcParams['ps.fonttype'] = 42
-import seaborn as sns
-sns.set(style="ticks")
-
 import time
+from osmm import OSMM
 
-eta = 0.1
-N = 1000000
-n_stocks = 100#500
-n_w = n_stocks * 2 + 1
-n = n_w + 1
-
-mean_return1_stock = 0.3  # 1.0
-# mean_return2_stock = 0  # 0.2
-mu1_stock = np.concatenate([mean_return1_stock + np.random.randn(n_stocks) * mean_return1_stock / 3.])
-# mu2_stock = np.concatenate([mean_return2_stock + np.random.randn(n_stocks) * mean_return2_stock / 3.])
-prob1_stock = 1
-prob2_stock = 0
-
-NFACT_stock = 5
-factors_1_stock = np.matrix(np.random.uniform(size=(n_stocks, NFACT_stock)))
-sigma_idyo_stock = 0.15  # .3
-sigma_fact_stock = 0.15  # .30
-Sigma1_stock = np.diag([sigma_idyo_stock ** 2] * n_stocks) + factors_1_stock * np.diag(
-        [sigma_fact_stock ** 2] * NFACT_stock) * factors_1_stock.T
-
-# factors_2_stock = np.matrix(np.random.uniform(size=(n_stocks, NFACT_stock)))
-# sigma_idyo_stock = 1e-4  # .3
-# sigma_fact_stock = 0  # .30
-# Sigma2_stock = np.diag([sigma_idyo_stock ** 2] * n_stocks) + factors_2_stock * np.diag(
-#     [sigma_fact_stock ** 2] * NFACT_stock) * factors_2_stock.T
+CPU = torch.device('cpu')
+if torch.cuda.is_available():
+    torch.set_default_tensor_type(torch.cuda.FloatTensor)
+    device = torch.device('cuda')
+else:
+    torch.set_default_tensor_type(torch.FloatTensor)
+    device = CPU
+print("device =", device)
+np.random.seed(0)
+np.seterr(all='raise')
 
 
-def generate_stock_option_return():
+def generate_random_data():
     stock_option_return = np.ones((N, n_w))
 
     stock_price = generate_stock_price()  # np.exp(np.random.randn(n_stocks, N))
@@ -56,22 +34,62 @@ def generate_stock_option_return():
 
 
 def generate_stock_price():
-    stock_prices = np.vstack([
-            np.exp(np.random.multivariate_normal(mu1_stock, Sigma1_stock, size=int(N))),
-            # np.exp(np.random.multivariate_normal(mu2_stock, Sigma2_stock, size=int(N * prob2_stock)))
-        ])
-    # np.random.shuffle(stock_prices)
+    stock_prices = np.exp(np.random.multivariate_normal(mu1_stock, Sigma1_stock, size=int(N)))
     return stock_prices.T  # n_stock by N
 
 
-def get_initial_val_cvar():
+eta = 0.1
+N = 10000
+n_stocks = 100
+n_w = n_stocks * 2 + 1
+n = n_w + 1
+
+mean_return1_stock = 0.3
+mu1_stock = np.concatenate([mean_return1_stock + np.random.randn(n_stocks) * mean_return1_stock / 3.])
+NFACT_stock = 5
+factors_1_stock = np.matrix(np.random.uniform(size=(n_stocks, NFACT_stock)))
+sigma_idyo_stock = 0.15  # .3
+sigma_fact_stock = 0.15  # .30
+Sigma1_stock = np.diag([sigma_idyo_stock ** 2] * n_stocks) \
+               + factors_1_stock * np.diag([sigma_fact_stock ** 2] * NFACT_stock) * factors_1_stock.T
+
+W = generate_random_data()
+W_validation = generate_random_data()
+
+
+def get_initial_val():
     ini = np.ones(n) / (n-1)
     return ini
 
 
+def get_cvxpy_description():
+    b_var = cp.Variable(n)
+    g = 0
+    constr = [cp.sum(b_var[1:n]) == 1, b_var[1:n] >= 0, b_var[0] >= 1e-8]
+    return b_var, g, constr
+
+
+def my_objf_torch(r_torch=None, b_torch=None, take_mean=True):
+    if b_torch.shape == torch.Size([n]):
+        tmp = torch.matmul(r_torch.T, b_torch[1:n])
+    else:
+        tmp = torch.sum(r_torch * b_torch[1:n, :], axis=0)
+    if take_mean:
+        objf = 1.0 / (1.0 - eta) * torch.mean(torch.relu(-tmp + b_torch[0])) - b_torch[0]
+    else:
+        objf = 1.0 / (1.0 - eta) * torch.relu(-tmp + b_torch[0]) - b_torch[0]
+    return objf
+
+osmm_prob = OSMM(f_torch=my_objf_torch, g_cvxpy=get_cvxpy_description, get_initial_val=get_initial_val,
+                 W=W, W_validate=W_validation)
+osmm_prob.solve()
+
+
+#########################################################################
+### baseline and plot
 def get_baseline_soln_cvar(R, compare_with_all=False):
     b_baseline_var = cp.Variable(n)  # (beta, b)
-    cvar_baseline = b_baseline_var[0] + 1.0 / (1.0 - eta) * cp.sum(cp.maximum(0, -R.T @ b_baseline_var[1:n] - b_baseline_var[0])) / N
+    cvar_baseline = b_baseline_var[0] + 1.0 / (1.0 - eta) * cp.sum(cp.pos(-R.T @ b_baseline_var[1:n] - b_baseline_var[0])) / N
     obj_baseline = cvar_baseline
     constr_baseline = [b_baseline_var[1:n] >= 0, cp.sum(b_baseline_var[1:n]) == 1]
     prob_baseline = cp.Problem(cp.Minimize(obj_baseline), constr_baseline)
@@ -118,35 +136,9 @@ def get_baseline_soln_cvar_mosek(R):
     return np.concatenate([a_baseline_var.level(), b_baseline_var.level()]), np.sum(z.level()) / N / (1-eta) - a_baseline_var.level()
 
 
-def get_cvxpy_description_cvar():
-    b_var = cp.Variable(n)
-    g = 0 * cp.sum(b_var)
-    constr = [cp.sum(b_var[1:n]) == 1, b_var[1:n] >= 0, b_var[0] >= 1e-8]
-    return b_var, g, constr
-
-
-def my_objf_torch_cvar(r_torch=None, b_torch=None, take_mean=True):
-    if b_torch.shape == torch.Size([n]):
-        tmp = torch.matmul(r_torch.T, b_torch[1:n])
-    else:
-        tmp = torch.sum(r_torch * b_torch[1:n, :], axis=0)
-    if take_mean:
-        objf = 1.0 / (1.0 - eta) * torch.mean(torch.relu(-tmp + b_torch[0])) - b_torch[0]
-    else:
-        objf = 1.0 / (1.0 - eta) * torch.relu(-tmp + b_torch[0]) - b_torch[0]
-    return objf
-
-
-def my_plot_cvar_one_result(W, xs, objfs, is_save_fig=False, figname="cvar.pdf"):
+def my_plot_cvar_one_result(W, x_best, is_save_fig=False, figname="cvar.pdf"):
     linewidth = 2
     fontsize = 14
-
-    num_trials, _, num_iters = objfs.shape
-    _, _, _, saved_num_iters = xs.shape
-    if num_iters == saved_num_iters:
-        x_best, _ = get_best_x(objfs, xs, trial_idx=0)
-    else:
-        x_best, _ = get_best_x(objfs[:, :, num_iters - saved_num_iters:num_iters], xs, trial_idx=0)
 
     fig = plt.figure(tight_layout=True, figsize=(12, 6))
     gs = gridspec.GridSpec(1, 2)

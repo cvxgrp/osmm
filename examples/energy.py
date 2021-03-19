@@ -1,17 +1,23 @@
+import torch
 import autograd.numpy as np
 import cvxpy as cp
-
-import torch
-from plot_convergence_curves import get_best_x
 import matplotlib.gridspec as gridspec
-import matplotlib
 import matplotlib.pyplot as plt
-matplotlib.rcParams['pdf.fonttype'] = 42
-matplotlib.rcParams['ps.fonttype'] = 42
-import seaborn as sns
-sns.set(style="ticks")
 import pandas as pd
+import seaborn as sns
 import time
+from osmm import OSMM
+
+CPU = torch.device('cpu')
+if torch.cuda.is_available():
+    torch.set_default_tensor_type(torch.cuda.FloatTensor)
+    device = torch.device('cuda')
+else:
+    torch.set_default_tensor_type(torch.FloatTensor)
+    device = CPU
+print("device =", device)
+np.random.seed(0)
+np.seterr(all='raise')
 
 t = 0
 q = 30
@@ -39,7 +45,8 @@ for i in range(m):
     D[all_edges[edge_idx][0], all_edges[edge_idx][1]] = 1
     D[all_edges[edge_idx][1], all_edges[edge_idx][0]] = 1
 
-def generate_prob_data_energy():
+
+def generate_random_data():
     Sigma = np.linalg.inv(D.dot(D.T))
     d = -np.exp(np.random.multivariate_normal(np.zeros(q), np.eye(q) * 0.5, size=int(N)) + 0.1).T
     d[0:q // 2, :] = -np.exp(np.random.multivariate_normal(np.zeros(q // 2), np.eye(q // 2) * 0.5, size=int(N)) - 2).T
@@ -49,7 +56,12 @@ def generate_prob_data_energy():
     W[q:q * 2, :] = d
     return W
 
-def get_initial_val_energy():
+
+W = generate_random_data()
+W_validation = generate_random_data()
+
+
+def get_initial_val():
     p_var = cp.Variable(q)
     u_var = cp.Variable(m)
     constr = [A @ u_var + p_var == 0, cp.norm(u_var, 'inf') <= u_max, cp.norm(p_var, 'inf') <= p_max]
@@ -62,6 +74,32 @@ def get_initial_val_energy():
     return ini
 
 
+def get_cvxpy_description():
+    x_var = cp.Variable(q + m + 1)
+    constr = [A @ x_var[q:q + m] + x_var[0:q] == 0, cp.norm(x_var[q:q + m], 'inf') <= u_max,
+              cp.norm(x_var[0:q], 'inf') <= p_max, x_var[q + m] >= 1e-8]
+    g = 0
+    return x_var, g, constr
+
+
+def my_objf_torch(w_torch=None, x_torch=None, take_mean=True):
+    s_torch = w_torch[0:q, :]
+    d_torch = w_torch[q:q * 2, :]
+    if x_torch.shape == torch.Size([n]):
+        objf_s = torch.sum(torch.relu(-d_torch.T - s_torch.T - x_torch[0:q]), axis=1) - t
+    else:
+        objf_s = torch.sum(torch.relu(-d_torch - s_torch - x_torch[0:q, :]), axis=0) - t
+    if take_mean:
+        result = torch.mean(torch.square(torch.relu(objf_s + x_torch[q + m]))) / x_torch[q + m]
+        return result
+
+
+osmm_prob = OSMM(f_torch=my_objf_torch, g_cvxpy=get_cvxpy_description, get_initial_val=get_initial_val,
+                 W=W, W_validate=W_validation)
+osmm_prob.solve(solver="MOSEK")
+
+#########################################################################
+### baseline and plot
 def get_baseline_soln_energy(W, compare_with_all=False):
     s = W[0:q, :]
     d = W[q:q * 2, :]
@@ -109,35 +147,9 @@ def get_baseline_soln_energy(W, compare_with_all=False):
     return np.concatenate([p_var.value, u_var.value, a_var.value]), prob_baseline_val, mosek_solve_time
 
 
-def get_cvxpy_description_energy():
-    x_var = cp.Variable(q + m + 1)
-    constr = [A @ x_var[q:q + m] + x_var[0:q] == 0, cp.norm(x_var[q:q + m], 'inf') <= u_max,
-              cp.norm(x_var[0:q], 'inf') <= p_max,
-              x_var[q + m] >= 1e-8]
-    g = 0
-    return x_var, g, constr
-
-def my_objf_torch_energy(w_torch=None, x_torch=None, take_mean=True):
-    s_torch = w_torch[0:q, :]
-    d_torch = w_torch[q:q * 2, :]
-    if x_torch.shape == torch.Size([n]):
-        objf_s = torch.sum(torch.relu(-d_torch.T - s_torch.T - x_torch[0:q]), axis=1) - t
-    else:
-        objf_s = torch.sum(torch.relu(-d_torch - s_torch - x_torch[0:q, :]), axis=0) - t
-    if take_mean:
-        result = torch.mean(torch.square(torch.relu(objf_s + x_torch[q + m]))) / x_torch[q + m]
-        return result
-
-def my_plot_energy_one_result(W, xs, objfs, is_save_fig=False, figname="energy.pdf"):
+def my_plot_energy_one_result(W, x_best, is_save_fig=False, figname="energy.pdf"):
     linewidth = 2
     fontsize = 14
-
-    num_trials, _, num_iters = objfs.shape
-    _, _, _, saved_num_iters = xs.shape
-    if num_iters == saved_num_iters:
-        x_best, _ = get_best_x(objfs, xs, trial_idx=0)
-    else:
-        x_best, _ = get_best_x(objfs[:, :, num_iters - saved_num_iters:num_iters], xs, trial_idx=0)
 
     fig = plt.figure(tight_layout=True, figsize=(18, 6))
     gs = gridspec.GridSpec(1, 3)
@@ -158,8 +170,7 @@ def my_plot_energy_one_result(W, xs, objfs, is_save_fig=False, figname="energy.p
     W_df["Node Index"] = W_df["Node Index"].astype(int)
 
     sns.stripplot(data=W_df, x="Node Index", y="Amount of Energy", hue="Category", linewidth=1,
-                      dodge=True, alpha=0.15, marker='.', palette={"Renewable Source": "b", "Demand": ".85"},
-                      ax=a)
+                  dodge=True, alpha=0.15, marker='.', palette={"Renewable Source": "b", "Demand": ".85"}, ax=a)
     a.set_xlabel("Node Index", fontsize=fontsize)
     a.set_ylabel("Amount of Energy", fontsize=fontsize)
     a.set_yscale("log")
