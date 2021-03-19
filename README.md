@@ -5,7 +5,7 @@ minimize f(x, W) + g(x),
 ```
 where `x` is the variable, and `W` is a given data matrix. The oracle function `f` is defined by Pytorch, and the structured function `g` is defined by cvxpy.
 
-The implementation is based on our paper XXX.
+The implementation is based on our paper Minimizing Oracle-Structured Composite Functions.
 
 ### Installation
 To install `osmm`, please run 
