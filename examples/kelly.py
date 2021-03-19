@@ -113,7 +113,7 @@ def my_objf_torch(r_torch=None, b_torch=None, take_mean=True):
 
 
 osmm_prob = OSMM(f_torch=my_objf_torch, g_cvxpy=get_cvxpy_description, get_initial_val=get_initial_val,
-                 W=W, W_validate=W)
+                 W=W, W_validate=W_validation)
 osmm_prob.solve()
 
 
