@@ -5,7 +5,6 @@ from mosek.fusion import *
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import time
-from osmm import OSMM
 
 CPU = torch.device('cpu')
 if torch.cuda.is_available():
@@ -53,9 +52,6 @@ sigma_fact_stock = 0.15  # .30
 Sigma1_stock = np.diag([sigma_idyo_stock ** 2] * n_stocks) \
                + factors_1_stock * np.diag([sigma_fact_stock ** 2] * NFACT_stock) * factors_1_stock.T
 
-W = generate_random_data()
-W_validation = generate_random_data()
-
 
 def get_initial_val():
     ini = np.ones(n) / (n-1)
@@ -80,14 +76,10 @@ def my_objf_torch(r_torch=None, b_torch=None, take_mean=True):
         objf = 1.0 / (1.0 - eta) * torch.relu(-tmp + b_torch[0]) - b_torch[0]
     return objf
 
-osmm_prob = OSMM(f_torch=my_objf_torch, g_cvxpy=get_cvxpy_description, get_initial_val=get_initial_val,
-                 W=W, W_validate=W_validation)
-osmm_prob.solve()
-
 
 #########################################################################
 ### baseline and plot
-def get_baseline_soln_cvar(R, compare_with_all=False):
+def get_baseline_soln_cvxpy(R, compare_with_all=False):
     b_baseline_var = cp.Variable(n)  # (beta, b)
     cvar_baseline = b_baseline_var[0] + 1.0 / (1.0 - eta) * cp.sum(cp.pos(-R.T @ b_baseline_var[1:n] - b_baseline_var[0])) / N
     obj_baseline = cvar_baseline
@@ -123,7 +115,7 @@ def get_baseline_soln_cvar(R, compare_with_all=False):
     return b_baseline_var.value, prob_baseline_val, mosek_solve_time
 
 
-def get_baseline_soln_cvar_mosek(R):
+def get_baseline_soln_mosek(R):
     M = Model()
     b_baseline_var = M.variable(n_w, Domain.greaterThan(0.))
     a_baseline_var = M.variable(1, Domain.greaterThan(0.))
@@ -136,7 +128,7 @@ def get_baseline_soln_cvar_mosek(R):
     return np.concatenate([a_baseline_var.level(), b_baseline_var.level()]), np.sum(z.level()) / N / (1-eta) - a_baseline_var.level()
 
 
-def my_plot_cvar_one_result(W, x_best, is_save_fig=False, figname="cvar.pdf"):
+def my_plot_one_result(W, x_best, is_save_fig=False, figname="cvar.pdf"):
     linewidth = 2
     fontsize = 14
 

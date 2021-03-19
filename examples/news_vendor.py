@@ -6,7 +6,6 @@ import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import time
-from osmm import OSMM
 
 CPU = torch.device('cpu')
 if torch.cuda.is_available():
@@ -66,10 +65,6 @@ def get_initial_val():
     return np.ones(n)
 
 
-W = generate_random_data()
-W_validation = generate_random_data()
-
-
 def get_cvxpy_description():
     q_var = cp.Variable(n)
     g = 0
@@ -90,14 +85,10 @@ def my_objf_torch(w_torch=None, q_torch=None, take_mean=True):
     objf = q_torch[n - 1] * torch.logsumexp(-profits / q_torch[n - 1] - np.log(batch_size) - np.log(1 - eta), 0)
     return objf
 
-osmm_prob = OSMM(f_torch=my_objf_torch, g_cvxpy=get_cvxpy_description, get_initial_val=get_initial_val,
-                 W=W, W_validate=W_validation)
-osmm_prob.solve(solver="MOSEK")
-
 
 #########################################################################
 ### baseline and plot
-def get_baseline_soln_news_vendor(W, compare_with_all=False):
+def get_baseline_soln_cvxpy(W, compare_with_all=False):
     print("in baseline solver")
     D = W[0:n_w // 2, :]
     P = W[n_w // 2:n_w, :]
@@ -150,7 +141,7 @@ def get_baseline_soln_news_vendor(W, compare_with_all=False):
     return q_baseline_var.value, prob_baseline_val, mosek_solve_time
 
 
-def get_baseline_soln_news_vendor_mosek(W):
+def get_baseline_soln_mosek(W):
     D = W[0:n_product, :]
     P = W[n_product:n_w, :]
     M = Model()
@@ -177,7 +168,7 @@ def get_baseline_soln_news_vendor_mosek(W):
     return np.concatenate([q_baseline_var.level(), a_baseline_var.level()]), u.level()
 
 
-def my_plot_newsvendor_one_result(W, x_best, is_save_fig=False, figname="newsvendor.pdf"):
+def my_plot_one_result(W, x_best, is_save_fig=False, figname="newsvendor.pdf"):
     linewidth = 2
     fontsize = 14
 

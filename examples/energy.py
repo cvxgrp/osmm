@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import time
-from osmm import OSMM
 
 CPU = torch.device('cpu')
 if torch.cuda.is_available():
@@ -57,10 +56,6 @@ def generate_random_data():
     return W
 
 
-W = generate_random_data()
-W_validation = generate_random_data()
-
-
 def get_initial_val():
     p_var = cp.Variable(q)
     u_var = cp.Variable(m)
@@ -94,13 +89,9 @@ def my_objf_torch(w_torch=None, x_torch=None, take_mean=True):
         return result
 
 
-osmm_prob = OSMM(f_torch=my_objf_torch, g_cvxpy=get_cvxpy_description, get_initial_val=get_initial_val,
-                 W=W, W_validate=W_validation)
-osmm_prob.solve(solver="MOSEK")
-
 #########################################################################
 ### baseline and plot
-def get_baseline_soln_energy(W, compare_with_all=False):
+def get_baseline_soln_cvxpy(W, compare_with_all=False):
     s = W[0:q, :]
     d = W[q:q * 2, :]
     p_var = cp.Variable(q)
@@ -147,7 +138,7 @@ def get_baseline_soln_energy(W, compare_with_all=False):
     return np.concatenate([p_var.value, u_var.value, a_var.value]), prob_baseline_val, mosek_solve_time
 
 
-def my_plot_energy_one_result(W, x_best, is_save_fig=False, figname="energy.pdf"):
+def my_plot_one_result(W, x_best, is_save_fig=False, figname="energy.pdf"):
     linewidth = 2
     fontsize = 14
 

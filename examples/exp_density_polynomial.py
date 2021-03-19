@@ -5,8 +5,9 @@ from scipy.stats import multivariate_normal
 import numpy.polynomial as polynomial
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
 import time
-from osmm import OSMM
 
 CPU = torch.device('cpu')
 if torch.cuda.is_available():
@@ -113,10 +114,6 @@ def generate_random_data():
     return W
 
 
-W = generate_random_data()
-W_validation = generate_random_data()
-
-
 def get_initial_val():
     return np.ones(n) / n
 
@@ -136,13 +133,9 @@ def my_objf_torch(w_torch=None, theta_torch=None):
     return A_theta + torch.matmul(theta_torch.T,  torch.tensor(c / m, dtype=torch.float))
 
 
-osmm_prob = OSMM(f_torch=my_objf_torch, g_cvxpy=get_cvxpy_description, get_initial_val=get_initial_val,
-                 W=W, W_validate=W_validation)
-osmm_prob.solve(solver="MOSEK")
-
 #########################################################################
 ### baseline and plot
-def get_baseline_soln_exp_density(W, compare_with_all=False):
+def get_baseline_soln_cvxpy(W, compare_with_all=False):
     phi_z = W[0:n, :]
     log_pi_z = W[n_w - 1, :]
     theta_var_baseline = cp.Variable(n)

@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import time
 # import sys; sys.path.insert(0, '..')
 # from osmm.osmm import OSMM
-from osmm import OSMM
 
 CPU = torch.device('cpu')
 if torch.cuda.is_available():
@@ -19,6 +18,13 @@ else:
 print("device =", device)
 np.random.seed(0)
 np.seterr(all='raise')
+
+N = 10000
+num_horses = 10
+n = 1 + num_horses + num_horses * (num_horses - 1) // 2 + num_horses * (num_horses - 1) * (num_horses - 2) // 6
+n_w = n
+mu = [1, 1, 1.5, 2.0, 3.0, 3.0, 13.5, 3.8, 4.0, 4.0]
+sigma = [0.5, 0.8, 0.8, 0.5, 0.9, 1.0, 1.0, 1.1, 0.9, 1.2]
 
 
 def generate_unit_payoff(N_payoff, num_horses, mu, sigma):
@@ -48,7 +54,7 @@ def generate_unit_payoff(N_payoff, num_horses, mu, sigma):
     return payoff
 
 
-def generate_random_data(N, num_horses, mu, sigma, payoff):
+def generate_random_data():
     place_count = np.array([num_horses - 1 - i for i in range(num_horses - 1)])
     show_count_0 = np.array([(num_horses - 1 - i) * (num_horses - 2 - i) / 2 for i in range(num_horses - 2)])
     show_count_1 = np.array([num_horses - 2 - i for i in range(num_horses - 2)])  # 8,7,...,1
@@ -76,16 +82,7 @@ def generate_random_data(N, num_horses, mu, sigma, payoff):
     return np.concatenate([win_bets_return, place_bets_return, show_bets_retrun, np.ones((1, N))])
 
 
-N = 10000
-num_horses = 10
-n = 1 + num_horses + num_horses * (num_horses - 1) // 2 + num_horses * (num_horses - 1) * (num_horses - 2) // 6
-n_w = n
-mu = [1, 1, 1.5, 2.0, 3.0, 3.0, 13.5, 3.8, 4.0, 4.0]
-sigma = [0.5, 0.8, 0.8, 0.5, 0.9, 1.0, 1.0, 1.1, 0.9, 1.2]
 payoff = generate_unit_payoff(N, num_horses, mu, sigma)
-
-W = generate_random_data(N, num_horses, mu, sigma, payoff)
-W_validation = generate_random_data(N, num_horses, mu, sigma, payoff)
 
 
 def get_initial_val():
@@ -110,11 +107,6 @@ def my_objf_torch(r_torch=None, b_torch=None, take_mean=True):
     else:
         objf = -torch.log(tmp)
     return objf
-
-
-osmm_prob = OSMM(f_torch=my_objf_torch, g_cvxpy=get_cvxpy_description, get_initial_val=get_initial_val,
-                 W=W, W_validate=W_validation)
-osmm_prob.solve()
 
 
 #########################################################################
