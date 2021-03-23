@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import cvxpy as cp
 from mosek.fusion import *
+import mosek as mosek
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import time
@@ -16,10 +17,10 @@ else:
     torch.set_default_tensor_type(torch.FloatTensor)
     device = CPU
 print("device =", device)
-np.random.seed(0)
+np.random.seed(10)
 np.seterr(all='raise')
 
-N = 10000
+N = 1000000
 num_horses = 10
 n = 1 + num_horses + num_horses * (num_horses - 1) // 2 + num_horses * (num_horses - 1) * (num_horses - 2) // 6
 n_w = n
@@ -54,6 +55,9 @@ def generate_unit_payoff(N_payoff, num_horses, mu, sigma):
     return payoff
 
 
+payoff = generate_unit_payoff(N * 10, num_horses, mu, sigma)
+
+
 def generate_random_data():
     place_count = np.array([num_horses - 1 - i for i in range(num_horses - 1)])
     show_count_0 = np.array([(num_horses - 1 - i) * (num_horses - 2 - i) / 2 for i in range(num_horses - 2)])
@@ -80,9 +84,6 @@ def generate_random_data():
                        + first_three_ordered_by_idx[2] - first_three_ordered_by_idx[1] - 1)
         show_bets_retrun[show_idx, i] = payoff[show_idx + 55]
     return np.concatenate([win_bets_return, place_bets_return, show_bets_retrun, np.ones((1, N))])
-
-
-payoff = generate_unit_payoff(N, num_horses, mu, sigma)
 
 
 def get_initial_val():
@@ -114,13 +115,30 @@ def my_objf_torch(r_torch=None, b_torch=None, take_mean=True):
 def get_baseline_soln_cvxpy(R, compare_with_all=False):
     b_baseline_var = cp.Variable(n, nonneg=True)
     obj_baseline = -cp.sum(cp.log(R.T @ b_baseline_var)) / N
-    b_baseline_var.value = np.ones(n) / n
-    print("ini", obj_baseline.value)
     constr_baseline = [cp.sum(b_baseline_var) == 1]
     prob_baseline = cp.Problem(cp.Minimize(obj_baseline), constr_baseline)
+    b_baseline_var.value = np.ones(n) / n
+    print("ini", obj_baseline.value)
     print("Start to solve baseline problem by MOSEK")
+    ep = 1e-6
     t0 = time.time()
-    prob_baseline.solve(solver="MOSEK")
+    prob_baseline.solve(solver="MOSEK", verbose=True, mosek_params={
+        # mosek.dparam.intpnt_co_tol_pfeas: ep,
+        # mosek.dparam.intpnt_co_tol_dfeas: ep,
+        mosek.dparam.intpnt_co_tol_rel_gap: ep,
+        # mosek.dparam.intpnt_co_tol_infeas: ep,
+        mosek.dparam.intpnt_co_tol_mu_red: ep,
+        # mosek.dparam.intpnt_qo_tol_dfeas: ep,
+        # mosek.dparam.intpnt_qo_tol_infeas: ep,
+        mosek.dparam.intpnt_qo_tol_mu_red: ep,
+        # mosek.dparam.intpnt_qo_tol_pfeas: ep,
+        mosek.dparam.intpnt_qo_tol_rel_gap: ep,
+        # mosek.dparam.intpnt_tol_dfeas: ep,
+        # mosek.dparam.intpnt_tol_infeas: ep,
+        mosek.dparam.intpnt_tol_mu_red: ep,
+        # mosek.dparam.intpnt_tol_pfeas: ep,
+        mosek.dparam.intpnt_tol_rel_gap: ep
+    })
     print("  MOSEK + CVXPY total time cost ", time.time() - t0)
     print("  MOSEK solver time cost", prob_baseline.solver_stats.solve_time)
     print("  Setup time cost", prob_baseline.solver_stats.setup_time)
@@ -133,7 +151,7 @@ def get_baseline_soln_cvxpy(R, compare_with_all=False):
         b_baseline_var.value = None
         print("Start to solve baseline problem by SCS")
         t0 = time.time()
-        prob_baseline.solve(solver="SCS", verbose=True)  # get the solve time info from verbose=True
+        prob_baseline.solve(solver="SCS", eps=ep, verbose=True)  # get the solve time info from verbose=True
         print("  SCS + CVXPY total time cost ", time.time() - t0)
         print("  Objective value", prob_baseline.value)
         print("  Solver status  " + prob_baseline.status + ".\n")
@@ -141,7 +159,7 @@ def get_baseline_soln_cvxpy(R, compare_with_all=False):
         b_baseline_var.value = None
         print("Start to solve baseline problem by ECOS")
         t0 = time.time()
-        prob_baseline.solve(solver="ECOS", verbose=False)
+        prob_baseline.solve(solver="ECOS", verbose=True, abstol=ep)#, reltol=ep, feastol=ep)
         print("  ECOS + CVXPY time cost ", time.time() - t0)
         print("  ECOS solver time cost", prob_baseline.solver_stats.solve_time)
         print("  Setup time cost", prob_baseline.solver_stats.setup_time)

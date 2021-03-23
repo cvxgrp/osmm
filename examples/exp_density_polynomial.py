@@ -1,6 +1,7 @@
 import torch
 import autograd.numpy as np
 import cvxpy as cp
+import mosek as mosek
 from scipy.stats import multivariate_normal
 import numpy.polynomial as polynomial
 import matplotlib.gridspec as gridspec
@@ -21,7 +22,7 @@ np.random.seed(0)
 np.seterr(all='raise')
 
 
-N_0 = 10000
+N_0 = 100000
 lam_reg = 1e-4
 
 d = 2
@@ -142,9 +143,26 @@ def get_baseline_soln_cvxpy(W, compare_with_all=False):
     objf_baseline = c.T @ theta_var_baseline / m + cp.log_sum_exp(-phi_z.T @ theta_var_baseline + log_pi_z) \
                     + lam_reg * cp.quad_form(theta_var_baseline, D_reg)
     prob_baseline = cp.Problem(cp.Minimize(objf_baseline))
+    ep = 1e-6
     print("Start to solve baseline problem by MOSEK")
     t0 = time.time()
-    prob_baseline.solve(solver="MOSEK")
+    prob_baseline.solve(solver="MOSEK", verbose=True, mosek_params={
+        # mosek.dparam.intpnt_co_tol_pfeas: ep,
+        # mosek.dparam.intpnt_co_tol_dfeas: ep,
+        mosek.dparam.intpnt_co_tol_rel_gap: ep,
+        # mosek.dparam.intpnt_co_tol_infeas: ep,
+        mosek.dparam.intpnt_co_tol_mu_red: ep,
+        # mosek.dparam.intpnt_qo_tol_dfeas: ep,
+        # mosek.dparam.intpnt_qo_tol_infeas: ep,
+        mosek.dparam.intpnt_qo_tol_mu_red: ep,
+        # mosek.dparam.intpnt_qo_tol_pfeas: ep,
+        mosek.dparam.intpnt_qo_tol_rel_gap: ep,
+        # mosek.dparam.intpnt_tol_dfeas: ep,
+        # mosek.dparam.intpnt_tol_infeas: ep,
+        mosek.dparam.intpnt_tol_mu_red: ep,
+        # mosek.dparam.intpnt_tol_pfeas: ep,
+        mosek.dparam.intpnt_tol_rel_gap: ep
+    })
     print("  MOSEK + CVXPY time cost ", time.time() - t0)
     print("  MOSEK solver time cost", prob_baseline.solver_stats.solve_time)
     print("  Setup time cost", prob_baseline.solver_stats.setup_time)
@@ -157,7 +175,7 @@ def get_baseline_soln_cvxpy(W, compare_with_all=False):
         theta_var_baseline.value = None
         print("Start to solve baseline problem by SCS")
         t0 = time.time()
-        prob_baseline.solve(solver="SCS", verbose=True)
+        prob_baseline.solve(solver="SCS", eps=ep, verbose=True)
         print("  SCS + CVXPY time cost ", time.time() - t0)
         print("  Objective value", prob_baseline.value)
         print("  Solver status  " + prob_baseline.status + ".\n")
@@ -165,7 +183,7 @@ def get_baseline_soln_cvxpy(W, compare_with_all=False):
         theta_var_baseline.value = None
         print("Start to solve baseline problem by ECOS")
         t0 = time.time()
-        prob_baseline.solve(solver="ECOS", verbose=False)
+        prob_baseline.solve(solver="ECOS", verbose=True, abstol=ep)
         print("  ECOS + CVXPY time cost ", time.time() - t0)
         print("  ECOS solver time cost", prob_baseline.solver_stats.solve_time)
         print("  Setup time cost", prob_baseline.solver_stats.setup_time)

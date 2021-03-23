@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import cvxpy as cp
 from mosek.fusion import *
+import mosek as mosek
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import time
@@ -17,32 +18,11 @@ print("device =", device)
 np.random.seed(0)
 np.seterr(all='raise')
 
-
-def generate_random_data():
-    stock_option_return = np.ones((N, n_w))
-
-    stock_price = generate_stock_price()  # np.exp(np.random.randn(n_stocks, N))
-
-    exercise_price = np.mean(stock_price, axis=1)
-    premium = 0.045 * exercise_price
-    share_price_minus_exercise_price = stock_price - exercise_price.reshape((n_stocks, 1))
-
-    stock_option_return[:, 0:n_stocks] = stock_price.T
-    stock_option_return[:, n_stocks:n_w - 1] = np.maximum(0, share_price_minus_exercise_price.T) / premium
-    return stock_option_return.T
-
-
-def generate_stock_price():
-    stock_prices = np.exp(np.random.multivariate_normal(mu1_stock, Sigma1_stock, size=int(N)))
-    return stock_prices.T  # n_stock by N
-
-
-eta = 0.1
-N = 10000
-n_stocks = 100
+eta = 0.9
+N = 1000000
+n_stocks = 1249
 n_w = n_stocks * 2 + 1
 n = n_w + 1
-
 mean_return1_stock = 0.3
 mu1_stock = np.concatenate([mean_return1_stock + np.random.randn(n_stocks) * mean_return1_stock / 3.])
 NFACT_stock = 5
@@ -51,6 +31,25 @@ sigma_idyo_stock = 0.15  # .3
 sigma_fact_stock = 0.15  # .30
 Sigma1_stock = np.diag([sigma_idyo_stock ** 2] * n_stocks) \
                + factors_1_stock * np.diag([sigma_fact_stock ** 2] * NFACT_stock) * factors_1_stock.T
+
+
+def generate_stock_price(N_M):
+    stock_prices = np.exp(np.random.multivariate_normal(mu1_stock, Sigma1_stock, size=int(N_M)))
+    return stock_prices.T  # n_stock by N
+
+
+stock_price_for_strike_price = generate_stock_price(N * 10)
+strike_price = np.mean(stock_price_for_strike_price, axis=1)
+premium = 0.045 * strike_price
+
+
+def generate_random_data():
+    stock_option_return = np.ones((N, n_w))
+    stock_price = generate_stock_price(N)
+    stock_price_minus_strike_price = stock_price - strike_price.reshape((n_stocks, 1))
+    stock_option_return[:, 0:n_stocks] = stock_price.T
+    stock_option_return[:, n_stocks:n_w - 1] = np.maximum(0, stock_price_minus_strike_price.T) / premium
+    return stock_option_return.T
 
 
 def get_initial_val():
@@ -83,11 +82,28 @@ def get_baseline_soln_cvxpy(R, compare_with_all=False):
     b_baseline_var = cp.Variable(n)  # (beta, b)
     cvar_baseline = b_baseline_var[0] + 1.0 / (1.0 - eta) * cp.sum(cp.pos(-R.T @ b_baseline_var[1:n] - b_baseline_var[0])) / N
     obj_baseline = cvar_baseline
-    constr_baseline = [b_baseline_var[1:n] >= 0, cp.sum(b_baseline_var[1:n]) == 1]
+    constr_baseline = [b_baseline_var[1:n] >= 0, cp.sum(b_baseline_var[1:n]) == 1, b_baseline_var[0] <= -1e-8]
     prob_baseline = cp.Problem(cp.Minimize(obj_baseline), constr_baseline)
+    ep = 1e-6
     print("Start to solve baseline problem by MOSEK")
     t0 = time.time()
-    prob_baseline.solve(solver="MOSEK", verbose=False)
+    prob_baseline.solve(solver="MOSEK", verbose=True, mosek_params={
+        # mosek.dparam.intpnt_co_tol_pfeas: ep,
+        # mosek.dparam.intpnt_co_tol_dfeas: ep,
+        mosek.dparam.intpnt_co_tol_rel_gap: ep,
+        # mosek.dparam.intpnt_co_tol_infeas: ep,
+        mosek.dparam.intpnt_co_tol_mu_red: ep,
+        # mosek.dparam.intpnt_qo_tol_dfeas: ep,
+        # mosek.dparam.intpnt_qo_tol_infeas: ep,
+        mosek.dparam.intpnt_qo_tol_mu_red: ep,
+        # mosek.dparam.intpnt_qo_tol_pfeas: ep,
+        mosek.dparam.intpnt_qo_tol_rel_gap: ep,
+        # mosek.dparam.intpnt_tol_dfeas: ep,
+        # mosek.dparam.intpnt_tol_infeas: ep,
+        mosek.dparam.intpnt_tol_mu_red: ep,
+        # mosek.dparam.intpnt_tol_pfeas: ep,
+        mosek.dparam.intpnt_tol_rel_gap: ep
+    })
     print("  MOSEK + CVXPY time cost ", time.time() - t0)
     print("  MOSEK solver time cost", prob_baseline.solver_stats.solve_time)
     print("  Setup time cost", prob_baseline.solver_stats.setup_time)
@@ -99,14 +115,14 @@ def get_baseline_soln_cvxpy(R, compare_with_all=False):
         b_baseline_var.value = None
         print("Start to solve baseline problem by SCS")
         t0 = time.time()
-        prob_baseline.solve(solver="SCS", verbose=True)
+        prob_baseline.solve(solver="SCS", eps=ep, verbose=True)
         print("  SCS + CVXPY time cost ", time.time() - t0)
         print("  Solver status  " + prob_baseline.status + ".\n")
 
         b_baseline_var.value = None
         print("Start to solve baseline problem by ECOS")
         t0 = time.time()
-        prob_baseline.solve(solver="ECOS", verbose=False)
+        prob_baseline.solve(solver="ECOS", verbose=True, abstol=ep)
         print("  ECOS + CVXPY time cost ", time.time() - t0)
         print("  ECOS solver time cost", prob_baseline.solver_stats.solve_time)
         print("  Setup time cost", prob_baseline.solver_stats.setup_time)
@@ -123,9 +139,11 @@ def get_baseline_soln_mosek(R):
     objf = Expr.sub(Expr.mul(Expr.sum(z), 1.0 / N / (1-eta)), a_baseline_var)
     M.objective(ObjectiveSense.Minimize, objf)
     M.constraint(Expr.sum(b_baseline_var), Domain.equalsTo(1))
-    M.constraint(Expr.sub(Expr.add(Expr.mul(Matrix.dense(-R.T), b_baseline_var), Expr.repeat(a_baseline_var, N, 0)), z), Domain.lessThan(0.))
+    M.constraint(Expr.sub(Expr.add(Expr.mul(Matrix.dense(-R.T), b_baseline_var), Expr.repeat(a_baseline_var, N, 0)), z),
+                 Domain.lessThan(0.))
     M.solve()
-    return np.concatenate([a_baseline_var.level(), b_baseline_var.level()]), np.sum(z.level()) / N / (1-eta) - a_baseline_var.level()
+    return np.concatenate([a_baseline_var.level(), b_baseline_var.level()]), np.sum(z.level()) / N / (1-eta) \
+           - a_baseline_var.level()
 
 
 def my_plot_one_result(W, x_best, is_save_fig=False, figname="cvar.pdf"):
