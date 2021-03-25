@@ -37,7 +37,7 @@ The arguments `f_torch`, `g_cvxpy`, `get_initial_val`, `W`, and `W_validate` def
 * `g_cvxpy` must be a function with no input and three outputs. The first output is a cvxpy variable for `x`, the second one is a cvxpy expression for the objective function in `g`, and the third one is a list of constraints contained in `g`.
 * `get_initial_val` must be a function with no input and one output, which is a numpy array for an initial value of `x`.
 * `W` must be a numpy matrix with dimension `n` by `N`, where `n` is the dimension of `x`.
-* `W_validate` is another numpy matrix with dimension `n` by `N` which serves as a validation dataset.
+* `W_validate` is not a required argument. For problems in which `W` is a sampling matrix, `W_validate` can be provided as another `n` by `N` sampling matrix used in `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy.
 
 There are some arguments for the `solve` method. They all have default values, and are not required to be provided by the user.
 * `solver` must be one of the solvers supported by cvxpy.
