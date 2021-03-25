@@ -53,7 +53,7 @@ Results after solving are stored in the dictonary `method_results` which is an a
 * `"iters_taken"` stores the actual number of iterations taken.
 * If `W_validate` is provided, then `"objf_validate_iters"` stores the validate objective value versus iterations.
 * More detailed histories during the iterations are as follows.
-  * `"X_iters"` stores the value of `x^k` versus iterations.
+  * `"X_iters"` stores the value of `x^k` versus iterations. It can be turned off by setting the argument `store_x_all_iters=False` in the `.solve()` method.
   * `"runtime_iters"` stores the time cost per iteration versus iterations.
   * `"opt_res_iters"` stores the norm of the optimality residue versus iterations.
   * `"f_grad_norm_iters"` stores the norm of the gradient of `f` versus iterations.
