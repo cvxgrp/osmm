@@ -68,7 +68,7 @@ def my_f_torch(w_torch, x_torch):
     objf = -torch.mean(torch.log(torch.matmul(w_torch.T, x_torch)))
     return objf
     
-def my_cvxpy_description():
+def my_g_cvxpy():
     x_var = cp.Variable(n, nonneg=True)
     g = 0
     constr = [cp.sum(x_var) == 1]
@@ -79,7 +79,7 @@ def my_initial_val():
 ```
 Next, with a given `n` by `N` data matrix `W`, the user can define an `OSMM` object.
 ```python
-osmm_prob = OSMM(my_f_torch, my_cvxpy_description, my_initial_val, W)
+osmm_prob = OSMM(my_f_torch, my_g_cvxpy, my_initial_val, W)
 ```
 The solve method is called by
 ```python
