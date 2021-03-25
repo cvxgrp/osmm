@@ -99,7 +99,7 @@ The solve method is called by
 ```python
 osmm_prob.solve()
 ```
-and a solution is stored in `osmm_prob.method_results["x_best"]`.
+and a solution is stored in `osmm_prob.method_results["x_soln"]`.
 
 For more examples, see the [`examples`](examples/) directory.
 
