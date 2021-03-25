@@ -42,7 +42,8 @@ The arguments `f_torch`, `g_cvxpy`, `get_initial_val`, `W`, and `W_validate` def
 There are some arguments for the `solve` method. They all have default values, and are not required to be provided by the user.
 * `solver` must be one of the solvers supported by cvxpy.
 * `max_num_rounds` is the maximum number of iterations.
-* `r` and `M` are the rank and memory parameters in the method. Please see the paper for details on them.
+* `r` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `r=0` the method becomes a proximal bundle algorithm. The default value is `20`.
+*  `M` is the memory in the piecewise affine bundle used in the method, and with `M=0` the method becomes a proximal quasi-Newton algorithm. The default value is `20`. Please see the paper for details on `r` and `M`.
 
 #### Return value
 Results after solving are stored in the dictonary `method_results` which is an attribute of an `OSMM` object.
