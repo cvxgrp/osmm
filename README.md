@@ -47,10 +47,23 @@ There are some arguments for the `solve` method. They all have default values, a
 
 #### Return value
 Results after solving are stored in the dictonary `method_results` which is an attribute of an `OSMM` object.
-* `"x_best"` stores the solution of `x`.
-* `"objf_iters"` stores the objective values during the iterations.
-* `"lower_bound_iters"` stores lower bounds on the optimal objective value during the iterations.
+* `"x_soln"` stores the solution of `x`.
+* `"objf_iters"` stores the objective value versus iterations.
+* `"lower_bound_iters"` stores lower bound on the optimal objective value versus iterations.
 * `"iters_taken"` stores the actual number of iterations taken.
+* If `W_validate` is provided, then `"objf_validate_iters"` stores the validate objective value versus iterations.
+* More detailed histories during the iterations are as follows.
+  * `"X_iters"` stores the value of `x^k` versus iterations.
+  * `"runtime_iters"` stores the time cost per iteration versus iterations.
+  * `"opt_res_iters"` stores the norm of the optimality residue versus iterations.
+  * `"f_grad_norm_iters"` stores the norm of the gradient of `f` versus iterations.
+  * `"q_norm_iters"` stores the norm of `q^k` versus iterations.
+  * `"v_norm_iters"` stores the norm of `v^k` versus iterations.
+  * `"lambd_iters"` stores the value of the penalty parameter versus iterations.
+  * `"mu_iters"` stores the value of `mu_k` versus iterations.
+  * `"t_iters"` stores the value of `t_k` versus iterations.
+  * `"num_f_evas_line_search_iters"` stores the number of `f` evaluations in the line search versus iterations.
+  * `"time_cost_detail_iters"` stores the time costs of evaluating `f` and gradient of `f` (once), `x^{k+1/2}`, and `L_k` versus iterations.
 
 #### Example
 We take the following Kelly gambling problem as an example
