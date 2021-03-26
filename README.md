@@ -20,7 +20,6 @@ python setup.py install
 * [PyTorch](https://pytorch.org/) >= 1.6.0
 * Python 3.x
 
-
 ## Usage
 `osmm` exposes the `OSMM` class 
 ```python
@@ -39,7 +38,49 @@ The arguments `f_torch` and `g_cvxpy` define the form of the problem.
 
 The arguments `W` and `init_val` in the solve method specify the problem to be solved.
 * `W` must be a numpy matrix with dimension `d` by `N`, where `N` is the number of data points.
-* `init_val` must be a numpy array for an initial value of `x`.
+* `init_val` must be a numpy array for an initial value of `x`, which must be in the domain of `f`.
+
+### Example
+We take the following Kelly gambling problem as an example
+```
+minimize - \sum_{i=1}^N [log(w_i'x)] / N
+subject to x >= 0, x'1 = 1,
+```
+where `x` is an `n` dimensional variable, and `w_i` for `i=1,...,N` are given data samples.
+
+The user implements the objective function as `f` by PyTorch and the indicator function of the constraints as `g` by cvxpy,
+and gives the data matrix `W` and an initial value of `x`.
+```python
+n = 100
+N = 10000
+
+def my_f_torch(w_torch, x_torch):
+    objf = -torch.mean(torch.log(torch.matmul(w_torch.T, x_torch)))
+    return objf
+    
+def my_g_cvxpy():
+    x_var = cp.Variable(n, nonneg=True)
+    g = 0
+    constr = [cp.sum(x_var) == 1]
+    additional_vars = []
+    return x_var, g, constr, additional_vars
+    
+W = np.random.uniform(low=0.5, high=1.0, size=(n, N))
+
+init_val = np.ones(n) / n
+```
+Next, the user can define an `OSMM` object by
+```python
+osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
+```
+Then the solve method is called by
+```python
+
+osmm_prob.solve(W, init_val)
+```
+and a solution for `x` is stored in `osmm_prob.method_results["soln"]`.
+
+For more examples, see the [`examples`](examples/) directory.
 
 ### Optional arguments
 There are some optional arguments for the `solve` method.
@@ -68,46 +109,5 @@ Results after solving are stored in the dictonary `method_results` which is an a
   * `"t_iters"` stores the value of `t` versus iterations.
   * `"num_f_evas_line_search_iters"` stores the number of `f` evaluations in the line search versus iterations.
   * `"time_cost_detail_iters"` stores the time costs of evaluating `f` and gradient of `f` (once), the tentative update, and the lower bound versus iterations.
-
-### Example
-We take the following Kelly gambling problem as an example
-```
-minimize - \sum_{i=1}^N [log(w_i'x)] / N
-subject to x >= 0, x'1 = 1,
-```
-where `x` is an `n` dimensional variable, and `w_i` for `i=1,...,N` are given data samples.
-
-The user implements the objective function as `f` by PyTorch and the indicator function of the constraints as `g` by cvxpy,
-and gives the data matrix `W` and an initial value of `x` which is in the domain of `f`.
-```python
-n = 100
-
-def my_f_torch(w_torch, x_torch):
-    objf = -torch.mean(torch.log(torch.matmul(w_torch.T, x_torch)))
-    return objf
-    
-def my_g_cvxpy():
-    x_var = cp.Variable(n, nonneg=True)
-    g = 0
-    constr = [cp.sum(x_var) == 1]
-    return x_var, g, constr
-    
-W = np.random.uniform(low=0.5, high=1.0, size=(n, N))
-
-init_val = np.ones(n) / n
-```
-Next,  the user can define an `OSMM` object.
-```python
-osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
-```
-Then the solve method is called by
-```python
-
-osmm_prob.solve(W, init_val)
-```
-and a solution is stored in `osmm_prob.method_results["soln"]`.
-
-For more examples, see the [`examples`](examples/) directory.
-
 
 ## Citing
