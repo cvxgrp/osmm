@@ -9,16 +9,12 @@ from .alg_mode import AlgMode
 
 
 class OSMM:
-    def __init__(self, f_torch, g_cvxpy, f_hess=None):
+    def __init__(self, f_torch, g_cvxpy):
         self.f_torch = f_torch
-        if f_hess is not None:
-            self.f_hess = f_hess  # numpy
-        else:
-            self.f_hess = self.f_hess_value
+        self.f_hess = self.f_hess_value
         self.W_torch = None
         self.W_torch_validate = None
-        self.eval_validate = False
-        self.x_var_cvxpy, self.g_cvxpy, self.constr_cvxpy = g_cvxpy()
+        self.x_var_cvxpy, self.g_cvxpy, self.constr_cvxpy, self.additional_vars_list = g_cvxpy()
         try:
             _ = self.g_cvxpy.value
         except Exception as e:
@@ -86,7 +82,6 @@ class OSMM:
         self.W_torch = torch.tensor(W, dtype=torch.float, requires_grad=False)
         if W_validate is not None:
             self.W_torch_validate = torch.tensor(W_validate, dtype=torch.float, requires_grad=False)
-            self.eval_validate = True
 
         if alg_mode == AlgMode.Exact or alg_mode == AlgMode.BFGSBundle:
             hessian_rank = self.n
@@ -95,11 +90,11 @@ class OSMM:
             hessian_rank = 20
 
         if self.store_x_all_iters:
-            self.method_results["X_iters"] = np.zeros((self.n, max_iter))
+            self.method_results["var_iters"] = np.zeros((self.n, max_iter))
         else:
-            self.method_results["X_iters"] = np.zeros((self.n, gradient_memory))
+            self.method_results["var_iters"] = np.zeros((self.n, gradient_memory))
         self.method_results["v_norm_iters"] = np.zeros(max_iter)
-        self.method_results["x_soln"] = np.zeros(self.n)
+        self.method_results["soln"] = np.zeros(self.n)
         self.method_results["objf_iters"] = np.zeros(max_iter)
         self.method_results["objf_validation_iters"] = np.zeros(max_iter)
         self.method_results["lambd_iters"] = np.zeros(max_iter)
@@ -113,6 +108,7 @@ class OSMM:
         self.method_results["q_norm_iters"] = np.zeros(max_iter)
         self.method_results["f_grad_norm_iters"] = np.zeros(max_iter)
         self.method_results["time_cost_detail_iters"] = np.zeros((4, max_iter))
+        self.method_results["soln_additional_vars"] = [None] * len(self.additional_vars_list)
 
         osmm_method = OsmmUpdate(self)
 
@@ -122,13 +118,13 @@ class OSMM:
         lower_bound_k = -np.inf
         mu_k = mu_0
 
-        self.method_results["X_iters"][:, 0] = x_k
+        self.method_results["var_iters"][:, 0] = x_k
         self.method_results["objf_iters"][0] = objf_k
         self.method_results["lambd_iters"][0] = lam_k
-        if self.eval_validate:
+        if self.W_torch_validate is not None:
             self.method_results["objf_validation_iters"][0] = objf_validation_k
         if objf_k < np.inf:
-            self.method_results["x_soln"] = x_k
+            self.method_results["soln"] = x_k
 
         update_func = partial(osmm_method.update_func, alg_mode=alg_mode, H_rank=hessian_rank,
                               pieces_num=gradient_memory, solver=solver,
@@ -143,9 +139,9 @@ class OSMM:
 
             stopping_criteria_satisfied, x_k_plus_one, objf_k_plus_one, g_k_plus_one, lower_bound_k_plus_one, \
             f_grad_k_plus_one, f_grads_iters_value, f_const_iters_value, G_k_plus_one, diag_H_k_plus_one, \
-            lam_k_plus_one, mu_k_plus_one = update_func(subprob, round_idx, objf_k, g_k, lower_bound_k, f_grad_k,
-                                                        f_grads_iters_value, f_const_iters_value, G_k, diag_H_k, lam_k,
-                                                        mu_k)
+            lam_k_plus_one, mu_k_plus_one, additional_vars_value \
+                = update_func(subprob, round_idx, objf_k, g_k, lower_bound_k, f_grad_k,
+                              f_grads_iters_value, f_const_iters_value, G_k, diag_H_k, lam_k, mu_k)
 
             end_time = time.time()
             runtime = end_time - start_time
@@ -160,7 +156,9 @@ class OSMM:
             lam_k = lam_k_plus_one
             mu_k = mu_k_plus_one
             if objf_k <= np.min(self.method_results["objf_iters"][1:round_idx]):
-                self.method_results["x_soln"] = x_k_plus_one
+                self.method_results["soln"] = x_k_plus_one
+                self.method_results["soln_additional_vars"] = additional_vars_value
+
 
         print("      Time elapsed (secs): %f." % np.sum(self.method_results["runtime_iters"]))
         print("")

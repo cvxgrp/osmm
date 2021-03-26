@@ -15,7 +15,7 @@ class OsmmUpdate:
     def initialization(self, init_val, H_rank, pieces_num, alg_mode, tau_min, ini_by_Hutchison):
         x_0 = init_val
         f_0 = self.problem_instance.f_value(x_0)
-        if self.problem_instance.eval_validate:
+        if self.problem_instance.W_torch_validate is not None:
             f_validation_0 = self.problem_instance.f_validate_value(x_0)
         else:
             f_validation_0 = None
@@ -29,13 +29,13 @@ class OsmmUpdate:
                 break
         if is_initial_feasible:
             objf_0 = f_0 + g_0
-            if self.problem_instance.eval_validate is not None:
+            if self.problem_instance.W_torch_validate is not None:
                 objf_validation_0 = f_validation_0 + g_0
             else:
                 objf_validation_0 = None
         else:
             objf_0 = np.inf
-            if self.problem_instance.eval_validate is not None:
+            if self.problem_instance.W_torch_validate is not None:
                 objf_validation_0 = np.inf
             else:
                 objf_validation_0 = None
@@ -112,9 +112,9 @@ class OsmmUpdate:
             lower_bound_subp = subprob.lower_bound_subp
 
         if self.problem_instance.store_x_all_iters or round_idx < pieces_num:
-            xk = np.array(self.problem_instance.method_results["X_iters"][:, round_idx - 1])
+            xk = np.array(self.problem_instance.method_results["var_iters"][:, round_idx - 1])
         else:
-            xk = np.array(self.problem_instance.method_results["X_iters"][:, pieces_num - 1])
+            xk = np.array(self.problem_instance.method_results["var_iters"][:, pieces_num - 1])
         subprob.x_prev_para.value = xk
         subprob.f_grads_iters_para.value = f_grads_iters_value
         subprob.f_const_iters_para.value = f_const_iters_value
@@ -137,6 +137,7 @@ class OsmmUpdate:
         x_k_plus_half = self.problem_instance.x_var_cvxpy.value
         g_k_plus_half = self.problem_instance.g_cvxpy.value
         bundle_dual = subprob.bundle_constr[0].dual_value
+        additional_vars_value = [var.value for var in self.problem_instance.additional_vars_list]
 
         begin_line_search_time = time.time()
         if subp_solver_success:
@@ -151,13 +152,13 @@ class OsmmUpdate:
         end_line_search_time = time.time()
 
         self.problem_instance.x_var_cvxpy.value = x_k_plus_one
-        g_k_plus_one = self.problem_instance.g_cvxpy.value
-        objf_k_plus_one = f_k_plus_one + g_k_plus_one
-        if self.problem_instance.eval_validate:
+        ub_g_k_plus_one = self.problem_instance.g_cvxpy.value
+        ub_objf_k_plus_one = f_k_plus_one + ub_g_k_plus_one
+        if self.problem_instance.W_torch_validate is not None:
             f_validation_k_plus_one = self.problem_instance.f_validate_value(x_k_plus_one)
-            objf_validation_k_plus_one = f_validation_k_plus_one + g_k_plus_one
+            ub_objf_validation_k_plus_one = f_validation_k_plus_one + ub_g_k_plus_one
         else:
-            objf_validation_k_plus_one = None
+            ub_objf_validation_k_plus_one = None
 
         begin_evaluate_f_grad_time = time.time()
         f_grad_k_plus_one = self.problem_instance.f_grad_value(x_k_plus_one)
@@ -201,11 +202,11 @@ class OsmmUpdate:
                 print("lower bound problem error:", e)
                 lower_bound_k_plus_one = lower_bound_k
             end_evaluate_L_k = time.time()
-            print("iter=", round_idx, "objf_k+1=", objf_k_plus_one, "L_k+1=", lower_bound_k_plus_one,
+            print("iter=", round_idx, "objf_k+1=", ub_objf_k_plus_one, "L_k+1=", lower_bound_k_plus_one,
                   "lam_k+1=", lam_k_plus_one, "tk=", tk, "mu_k+1", mu_k_plus_one,
                   "||G_k+1||_F=", np.linalg.norm(G_k_plus_one, 'fro'), "tau_k+1", tau_k_plus_one)
 
-        stopping_criteria_satisfied = self._stopping_criteria(objf_k_plus_one, objf_validation_k_plus_one,
+        stopping_criteria_satisfied = self._stopping_criteria(ub_objf_k_plus_one, ub_objf_validation_k_plus_one,
                                                               lower_bound_k_plus_one, tk, opt_residual,
                                                               np.linalg.norm(q_k_plus_one),
                                                               np.linalg.norm(f_grad_k_plus_one))
@@ -218,15 +219,15 @@ class OsmmUpdate:
         self.problem_instance.method_results["time_cost_detail_iters"][3, round_idx] = end_evaluate_L_k \
                                                                                            - begin_evaluate_L_k
         if self.problem_instance.store_x_all_iters or round_idx < pieces_num:
-            self.problem_instance.method_results["X_iters"][:, round_idx] = x_k_plus_one
+            self.problem_instance.method_results["var_iters"][:, round_idx] = x_k_plus_one
         else:
-            self.problem_instance.method_results["X_iters"][:, 0:pieces_num - 1] = \
-                self.problem_instance.method_results["X_iters"][:, 1:pieces_num]
-            self.problem_instance.method_results["X_iters"][:, pieces_num - 1] = x_k_plus_one
+            self.problem_instance.method_results["var_iters"][:, 0:pieces_num - 1] = \
+                self.problem_instance.method_results["var_iters"][:, 1:pieces_num]
+            self.problem_instance.method_results["var_iters"][:, pieces_num - 1] = x_k_plus_one
         self.problem_instance.method_results["v_norm_iters"][round_idx] = np.linalg.norm(v_k)
-        self.problem_instance.method_results["objf_iters"][round_idx] = objf_k_plus_one
-        if self.problem_instance.eval_validate is not None:
-            self.problem_instance.method_results["objf_validation_iters"][round_idx] = objf_validation_k_plus_one
+        self.problem_instance.method_results["objf_iters"][round_idx] = ub_objf_k_plus_one
+        if self.problem_instance.W_torch_validate is not None:
+            self.problem_instance.method_results["objf_validation_iters"][round_idx] = ub_objf_validation_k_plus_one
         self.problem_instance.method_results["num_f_evas_line_search_iters"][round_idx] = num_f_evas_line_search
         self.problem_instance.method_results["q_norm_iters"][round_idx] = np.linalg.norm(q_k_plus_one)
         self.problem_instance.method_results["f_grad_norm_iters"][round_idx] = np.linalg.norm(f_grad_k_plus_one)
@@ -237,9 +238,9 @@ class OsmmUpdate:
         self.problem_instance.method_results["lower_bound_iters"][round_idx] = lower_bound_k_plus_one
         self.problem_instance.method_results["iters_taken"] = round_idx
 
-        return stopping_criteria_satisfied, x_k_plus_one, objf_k_plus_one, g_k_plus_one, lower_bound_k_plus_one, \
+        return stopping_criteria_satisfied, x_k_plus_one, ub_objf_k_plus_one, ub_g_k_plus_one, lower_bound_k_plus_one, \
                f_grad_k_plus_one,f_grads_iters_value, f_const_iters_value, G_k_plus_one, diag_H_k_plus_one, \
-               lam_k_plus_one, mu_k_plus_one
+               lam_k_plus_one, mu_k_plus_one, additional_vars_value
 
     def _line_search(self, x_k_plus_half, xk, g_k_plus_half, g_k, objf_k, G_k, lam_k, beta, j_max, alpha, ep=1e-15): #tol=1e-5,
         v_k = x_k_plus_half - xk

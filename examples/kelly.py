@@ -95,7 +95,7 @@ def get_cvxpy_description():
     b_var = cp.Variable(n, nonneg=True)
     g = 0
     constr = [cp.sum(b_var) == 1]
-    return b_var, g, constr
+    return b_var, g, constr, []
 
 
 def my_objf_torch(r_torch=None, b_torch=None, take_mean=True):
