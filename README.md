@@ -9,7 +9,7 @@ The structured function `g` is convex, defined by cvxpy, and can contain constra
 
 The implementation is based on our paper Minimizing Oracle-Structured Composite Functions [XXX add link].
 
-### Installation
+## Installation
 To install `osmm`, please run 
 ```
 python setup.py install
@@ -21,19 +21,18 @@ python setup.py install
 * Python 3.x
 
 
-### Usage
+## Usage
 `osmm` exposes the `OSMM` class 
 ```python
 OSMM(f_torch, g_cvxpy)
 ```
-which generates an object defining the problem, 
-and a member function of the `OSMM` class
+which generates an object defining the form of the problem, and a member function of the `OSMM` class
 ```python
 solve(W, init_val)
 ```
-which runs the solve method.
+which specifies the problem and runs the solve method.
 
-#### Required arguments
+### Required arguments
 The arguments `f_torch` and `g_cvxpy` define the form of the problem.
 * `f_torch` must be a function with two inputs and one output. The first and the second inputs are the PyTorch tensors for the data matrix `W` and the variable vector `x`, respectively. The output is a PyTorch tensor for the scalar function value of `f`.
 * `g_cvxpy` must be a function with no input and four outputs. The first output is a cvxpy variable for `x`, the second one is a cvxpy expression for the objective function in `g`, the third one is a list of constraints contained in `g`, and the last output is a list of additional variables.
@@ -42,15 +41,15 @@ The arguments `W` and `init_val` in the solve method specify the problem to be s
 * `W` must be a numpy matrix with dimension `d` by `N`, where `N` is the number of data points.
 * `init_val` must be a numpy array for an initial value of `x`.
 
-#### Optional arguments
+### Optional arguments
 There are some optional arguments for the `solve` method.
-* `W_validate` is a numpy matrix with dimension `d` by `N`. For problems in which `W` is a sampling matrix, `W_validate` can be provided as another sampling matrix used in `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy.
+* `W_validate` is a numpy matrix with dimension `d` by `N`. For problems in which `W` is a sampling matrix, `W_validate` can be provided as another sampling matrix used by `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy.
 * `solver` must be one of the solvers supported by cvxpy.
 * `max_iter` is the maximum number of iterations.
 * `r` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `r=0` the method becomes a proximal bundle algorithm. The default value is `20`.
 *  `M` is the memory in the piecewise affine bundle used in the method, and with `M=0` the method becomes a proximal quasi-Newton algorithm. The default value is `20`. Please see the paper for details on `r` and `M`.
 
-#### Return value
+### Return value
 Results after solving are stored in the dictonary `method_results` which is an attribute of an `OSMM` object.
 * `"soln"` stores the solution of `x`.
 * `"objf_iters"` stores the objective value versus iterations.
@@ -70,7 +69,7 @@ Results after solving are stored in the dictonary `method_results` which is an a
   * `"num_f_evas_line_search_iters"` stores the number of `f` evaluations in the line search versus iterations.
   * `"time_cost_detail_iters"` stores the time costs of evaluating `f` and gradient of `f` (once), the tentative update, and the lower bound versus iterations.
 
-#### Example
+### Example
 We take the following Kelly gambling problem as an example
 ```
 minimize - \sum_{i=1}^N [log(w_i'x)] / N
@@ -79,7 +78,7 @@ subject to x >= 0, x'1 = 1,
 where `x` is an `n` dimensional variable, and `w_i` for `i=1,...,N` are given data samples.
 
 The user implements the objective function as `f` by PyTorch and the indicator function of the constraints as `g` by cvxpy,
-and gives an initial value of `x` which is in the domain of `f`.
+and gives the data matrix `W` and an initial value of `x` which is in the domain of `f`.
 ```python
 n = 100
 
@@ -92,15 +91,18 @@ def my_g_cvxpy():
     g = 0
     constr = [cp.sum(x_var) == 1]
     return x_var, g, constr
+    
+W = np.random.uniform(low=0.5, high=1.0, size=(n, N))
+
+init_val = np.ones(n) / n
 ```
 Next,  the user can define an `OSMM` object.
 ```python
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
 ```
-With a given `n` by `N` data matrix `W` and an initial value, the solve method is called by
+Then the solve method is called by
 ```python
-W = np.random.uniform(low=0.5, high=1.0, size=(n, N))
-init_val = np.ones(n) / n
+
 osmm_prob.solve(W, init_val)
 ```
 and a solution is stored in `osmm_prob.method_results["soln"]`.
@@ -108,4 +110,4 @@ and a solution is stored in `osmm_prob.method_results["soln"]`.
 For more examples, see the [`examples`](examples/) directory.
 
 
-### Citing
+## Citing
