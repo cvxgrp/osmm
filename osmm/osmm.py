@@ -77,7 +77,8 @@ class OSMM:
     def solve(self, W, init_val, W_validate=None, max_iter=200, hessian_rank=20, gradient_memory=20, solver="ECOS",
               alg_mode=AlgMode.LowRankQNBundle,
               ini_by_Hutchison=True, stop_early=True, num_iter_eval_Lk=10, tau_min=1e-3, mu_min=1e-4, mu_max=1e5,
-              mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8, alpha=0.05, beta=0.5, j_max=10, ep=1e-15):
+              mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8, alpha=0.05, beta=0.5, j_max=10, ep=1e-15,
+              eps_gap_abs=1e-4, eps_gap_rel=1e-4, eps_res_abs=1e-4, eps_res_rel=1e-4):
 
         self.W_torch = torch.tensor(W, dtype=torch.float, requires_grad=False)
         if W_validate is not None:
@@ -130,7 +131,9 @@ class OSMM:
                               pieces_num=gradient_memory, solver=solver,
                               mu_min=mu_min, tau_min=tau_min, mu_max=mu_max, ep=ep,
                               gamma_inc=gamma_inc, gamma_dec=gamma_dec,
-                              beta=beta, j_max=j_max, alpha=alpha, num_iter_eval_Lk=num_iter_eval_Lk)
+                              beta=beta, j_max=j_max, alpha=alpha, num_iter_eval_Lk=num_iter_eval_Lk,
+                              eps_gap_abs=eps_gap_abs, eps_gap_rel=eps_gap_rel, eps_res_abs=eps_res_abs,
+                              eps_res_rel=eps_res_rel)
 
         round_idx = 1
         stopping_criteria_satisfied = False

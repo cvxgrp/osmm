@@ -19,7 +19,6 @@ print("device =", device)
 np.random.seed(0)
 np.seterr(all='raise')
 
-t = 0
 q = 30
 all_edges = []
 for i in range(q - 1):
@@ -29,12 +28,12 @@ for i in range(q - 1):
         all_edges.append([i, j])
 
 m = len(all_edges) // 2
-N = 100000
+N = 1000
 A = np.zeros((q, m))
 connected_edges = np.random.choice(range(len(all_edges)), m, replace=False)
 p_max = 1
 u_max = 0.1
-n = q + m + 1
+n = q + 1
 n_w = q * 2
 D = np.eye(q)
 
@@ -65,28 +64,29 @@ def get_initial_val():
     fea_baseline.solve(solver="MOSEK")
     ini = np.zeros(n)
     ini[0:q] = p_var.value
-    ini[q:q + m] = u_var.value
-    ini[q + m] = 1.0
+    # ini[q:q + m] = u_var.value
+    ini[q] = 1.0
     return ini
 
 
 def get_cvxpy_description():
-    x_var = cp.Variable(q + m + 1)
-    constr = [A @ x_var[q:q + m] + x_var[0:q] == 0, cp.norm(x_var[q:q + m], 'inf') <= u_max,
-              cp.norm(x_var[0:q], 'inf') <= p_max, x_var[q + m] >= 1e-8]
+    x_var = cp.Variable(q + 1) #[p, alpha]
+    u_var = cp.Variable(m)
+    constr = [A @ u_var + x_var[0:q] == 0, cp.norm(u_var, 'inf') <= u_max,
+              cp.norm(x_var[0:q], 'inf') <= p_max, x_var[q] >= 1e-8]
     g = 0
-    return x_var, g, constr
+    return x_var, g, constr, [u_var]
 
 
 def my_objf_torch(w_torch=None, x_torch=None, take_mean=True):
     s_torch = w_torch[0:q, :]
     d_torch = w_torch[q:q * 2, :]
     if x_torch.shape == torch.Size([n]):
-        objf_s = torch.sum(torch.relu(-d_torch.T - s_torch.T - x_torch[0:q]), axis=1) - t
+        objf_s = torch.sum(torch.relu(-d_torch.T - s_torch.T - x_torch[0:q]), axis=1)
     else:
-        objf_s = torch.sum(torch.relu(-d_torch - s_torch - x_torch[0:q, :]), axis=0) - t
+        objf_s = torch.sum(torch.relu(-d_torch - s_torch - x_torch[0:q, :]), axis=0)
     if take_mean:
-        result = torch.mean(torch.square(torch.relu(objf_s + x_torch[q + m]))) / x_torch[q + m]
+        result = torch.mean(torch.square(torch.relu(objf_s + x_torch[q]))) / x_torch[q]
         return result
 
 
@@ -101,7 +101,7 @@ def get_baseline_soln_cvxpy(W, compare_with_all=False):
     constr = [A @ u_var + p_var == 0, cp.norm(u_var, 'inf') <= u_max, cp.norm(p_var, 'inf') <= p_max, a_var >= 1e-8]
     loss = cp.sum(cp.pos(cp.vstack([-d[i, :] - s[i, :] - p_var[i] for i in range(q)])), axis=0)
     print("loss shape", loss.shape)
-    objf = cp.quad_over_lin(cp.pos(loss - t + a_var), a_var) / N
+    objf = cp.quad_over_lin(cp.pos(loss + a_var), a_var) / N
     prob_baseline = cp.Problem(cp.Minimize(objf), constr)
     print("Start MOSEK")
     t0 = time.time()

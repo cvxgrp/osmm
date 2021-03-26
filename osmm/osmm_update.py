@@ -22,11 +22,22 @@ class OsmmUpdate:
         self.problem_instance.x_var_cvxpy.value = x_0
         g_0 = self.problem_instance.g_cvxpy.value
 
-        is_initial_feasible = True
-        for constr in self.problem_instance.constr_cvxpy:
-            if not constr.value():
+        if len(self.problem_instance.constr_cvxpy) > 0:
+            check_g_fea_prob = cp.Problem(cp.Minimize(0), self.problem_instance.constr_cvxpy)
+            try:
+                check_g_fea_prob.solve()
+                if check_g_fea_prob.value is not None and check_g_fea_prob.value < np.inf:
+                    is_initial_feasible = True
+                else:
+                    is_initial_feasible = False
+            except Exception as e:
                 is_initial_feasible = False
-                break
+        else:
+            is_initial_feasible = True
+        # for constr in self.problem_instance.constr_cvxpy:
+        #     if not constr.value():
+        #         is_initial_feasible = False
+        #         break
         if is_initial_feasible:
             objf_0 = f_0 + g_0
             if self.problem_instance.W_torch_validate is not None:
@@ -85,11 +96,19 @@ class OsmmUpdate:
 
     def _stopping_criteria(self, objf_k_plus_one, objf_validation_k_plus_one, L_k_plus_one, t_k, opt_res_norm_k_plus_one,
                           q_norm_k_plus_one, f_grad_norm_k_plus_one,
-                          eps_gap_rel=1e-4, eps_res_abs=1e-4, eps_res_rel=1e-4):
-        if objf_validation_k_plus_one is not None and objf_k_plus_one is not None and objf_k_plus_one < np.inf and \
-                objf_k_plus_one - L_k_plus_one <= np.abs(objf_k_plus_one - objf_validation_k_plus_one) \
+                          eps_gap_abs, eps_gap_rel, eps_res_abs, eps_res_rel):
+        if objf_k_plus_one is not None and objf_k_plus_one < np.inf:
+            if objf_validation_k_plus_one is not None:
+                if objf_k_plus_one - L_k_plus_one <= np.abs(objf_k_plus_one - objf_validation_k_plus_one) \
                 + eps_gap_rel * np.abs(objf_k_plus_one):
-            return True
+                    return True
+            else:
+                if objf_k_plus_one - L_k_plus_one <= eps_gap_abs + eps_gap_rel * np.abs(objf_k_plus_one):
+                    return True
+        # if objf_validation_k_plus_one is not None and objf_k_plus_one is not None and objf_k_plus_one < np.inf and \
+        #         objf_k_plus_one - L_k_plus_one <= np.abs(objf_k_plus_one - objf_validation_k_plus_one) \
+        #         + eps_gap_rel * np.abs(objf_k_plus_one):
+        #     return True
         if t_k == 1 and \
                 opt_res_norm_k_plus_one <= self.problem_instance.n * eps_res_abs \
                 + eps_res_rel * (q_norm_k_plus_one + f_grad_norm_k_plus_one):
@@ -101,7 +120,8 @@ class OsmmUpdate:
                     alg_mode=None, H_rank=None, pieces_num=None, solver=None,
                     gamma_inc=None, gamma_dec=None,
                     mu_min=None, tau_min=None, mu_max=None, ep=None,
-                    beta=None, j_max=None, alpha=None, num_iter_eval_Lk=None):
+                    beta=None, j_max=None, alpha=None, num_iter_eval_Lk=None,
+                    eps_gap_abs=None, eps_gap_rel=None, eps_res_abs=None, eps_res_rel=None):
         if solver == "OSQP":
             cvxpy_subp = cp.Problem(cp.Minimize(subprob.f_hat_k + self.problem_instance.g_cvxpy + subprob.trust_pen),
                                     self.problem_instance.constr_cvxpy + subprob.bundle_constr)
@@ -209,7 +229,8 @@ class OsmmUpdate:
         stopping_criteria_satisfied = self._stopping_criteria(ub_objf_k_plus_one, ub_objf_validation_k_plus_one,
                                                               lower_bound_k_plus_one, tk, opt_residual,
                                                               np.linalg.norm(q_k_plus_one),
-                                                              np.linalg.norm(f_grad_k_plus_one))
+                                                              np.linalg.norm(f_grad_k_plus_one),
+                                                              eps_gap_abs, eps_gap_rel, eps_res_abs, eps_res_rel)
 
         self.problem_instance.method_results["time_cost_detail_iters"][0, round_idx] = f_eva_time_cost
         self.problem_instance.method_results["time_cost_detail_iters"][1, round_idx] = end_evaluate_f_grad_time \
