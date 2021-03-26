@@ -95,8 +95,7 @@ class OsmmUpdate:
                f_const_iters_value, G_0, diag_H_0
 
     def _stopping_criteria(self, objf_k_plus_one, objf_validation_k_plus_one, L_k_plus_one, t_k, opt_res_norm_k_plus_one,
-                          q_norm_k_plus_one, f_grad_norm_k_plus_one,
-                          eps_gap_abs, eps_gap_rel, eps_res_abs, eps_res_rel):
+                          q_norm_k_plus_one, f_grad_norm_k_plus_one, eps_gap_abs, eps_gap_rel, eps_res_abs, eps_res_rel):
         if objf_k_plus_one is not None and objf_k_plus_one < np.inf:
             if objf_validation_k_plus_one is not None:
                 if objf_k_plus_one - L_k_plus_one <= np.abs(objf_k_plus_one - objf_validation_k_plus_one) \
