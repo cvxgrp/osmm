@@ -34,7 +34,7 @@ which specifies the problem and runs the solve method.
 ### Required arguments
 The arguments `f_torch` and `g_cvxpy` define the form of the problem.
 * `f_torch` must be a function with two inputs and one output. The first and the second inputs are the PyTorch tensors for the data matrix `W` and the variable vector `x`, respectively. The output is a PyTorch tensor for the scalar function value of `f`.
-* `g_cvxpy` must be a function with no input and four outputs. The first output is a cvxpy variable for `x`, the second one is a cvxpy expression for the objective function in `g`, the third one is a list of constraints contained in `g`, and the last output is a list of additional variables.
+* `g_cvxpy` must be a function with no input and four outputs. The first output is a cvxpy variable for `x`, the second one is a cvxpy expression for the objective function in `g`, the third one is a list of constraints contained in `g`, and the last output is a list of additional variables. Note that returning additional variables in the last output is optional, and is only for accessing their solutions.
 
 The arguments `W` and `init_val` in the solve method specify the problem to be solved.
 * `W` must be a numpy matrix with dimension `d` by `N`, where `N` is the number of data points.
@@ -84,15 +84,16 @@ For more examples, see the [`examples`](examples/) directory.
 
 ### Optional arguments
 There are some optional arguments for the `solve` method.
-* `W_validate` is a numpy matrix with dimension `d` by `N`. For problems in which `W` is a sampling matrix, `W_validate` can be provided as another sampling matrix used by `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy.
+* `W_validate` is a numpy matrix with dimension `d` by `N`. When `W` is a sampling matrix, `W_validate` can be provided as another sampling matrix used by `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy.
 * `solver` must be one of the solvers supported by cvxpy.
 * `max_iter` is the maximum number of iterations.
-* `r` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `r=0` the method becomes a proximal bundle algorithm. The default value is `20`.
-*  `M` is the memory in the piecewise affine bundle used in the method, and with `M=0` the method becomes a proximal quasi-Newton algorithm. The default value is `20`. Please see the paper for details on `r` and `M`.
+* `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. The default value is `20`.
+*  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. The default value is `20`. Please see the paper for details.
 
 ### Return value
 Results after solving are stored in the dictonary `method_results` which is an attribute of an `OSMM` object.
-* `"soln"` stores the solution of `x`.
+* `"soln"` stores a solution of `x`.
+* `"soln_additional_vars"` stores (a list of) solutions of the addtional variables in the list given by the last output of `g_cvxpy`.
 * `"objf_iters"` stores the objective value versus iterations.
 * `"lower_bound_iters"` stores lower bound on the optimal objective value versus iterations.
 * `"iters_taken"` stores the actual number of iterations taken.
