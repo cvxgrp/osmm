@@ -37,19 +37,33 @@ The arguments `f_torch`, `g_cvxpy`, `get_initial_val`, `W`, and `W_validate` def
 * `g_cvxpy` must be a function with no input and three outputs. The first output is a cvxpy variable for `x`, the second one is a cvxpy expression for the objective function in `g`, and the third one is a list of constraints contained in `g`.
 * `get_initial_val` must be a function with no input and one output, which is a numpy array for an initial value of `x`.
 * `W` must be a numpy matrix with dimension `n` by `N`, where `n` is the dimension of `x`.
-* `W_validate` is another numpy matrix with dimension `n` by `N` which serves as a validation dataset.
+* `W_validate` is not a required argument. For problems in which `W` is a sampling matrix, `W_validate` can be provided as another `n` by `N` sampling matrix used in `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy.
 
 There are some arguments for the `solve` method. They all have default values, and are not required to be provided by the user.
 * `solver` must be one of the solvers supported by cvxpy.
 * `max_num_rounds` is the maximum number of iterations.
-* `r` and `M` are the rank and memory parameters in the method. Please see the paper for details on them.
+* `r` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `r=0` the method becomes a proximal bundle algorithm. The default value is `20`.
+*  `M` is the memory in the piecewise affine bundle used in the method, and with `M=0` the method becomes a proximal quasi-Newton algorithm. The default value is `20`. Please see the paper for details on `r` and `M`.
 
 #### Return value
 Results after solving are stored in the dictonary `method_results` which is an attribute of an `OSMM` object.
-* `"x_best"` stores the solution of `x`.
-* `"objf_iters"` stores the objective values during the iterations.
-* `"lower_bound_iters"` stores lower bounds on the optimal objective value during the iterations.
+* `"x_soln"` stores the solution of `x`.
+* `"objf_iters"` stores the objective value versus iterations.
+* `"lower_bound_iters"` stores lower bound on the optimal objective value versus iterations.
 * `"iters_taken"` stores the actual number of iterations taken.
+* If `W_validate` is provided, then `"objf_validate_iters"` stores the validate objective value versus iterations.
+* More detailed histories during the iterations are as follows.
+  * `"X_iters"` stores the value of `x^k` versus iterations. It can be turned off by setting the argument `store_x_all_iters=False` in the `.solve()` method.
+  * `"runtime_iters"` stores the time cost per iteration versus iterations.
+  * `"opt_res_iters"` stores the norm of the optimality residue versus iterations.
+  * `"f_grad_norm_iters"` stores the norm of the gradient of `f` versus iterations.
+  * `"q_norm_iters"` stores the norm of `q^k` versus iterations.
+  * `"v_norm_iters"` stores the norm of `v^k` versus iterations.
+  * `"lambd_iters"` stores the value of the penalty parameter versus iterations.
+  * `"mu_iters"` stores the value of `mu_k` versus iterations.
+  * `"t_iters"` stores the value of `t_k` versus iterations.
+  * `"num_f_evas_line_search_iters"` stores the number of `f` evaluations in the line search versus iterations.
+  * `"time_cost_detail_iters"` stores the time costs of evaluating `f` and gradient of `f` (once), `x^{k+1/2}`, and `L_k` versus iterations.
 
 #### Example
 We take the following Kelly gambling problem as an example
@@ -68,7 +82,7 @@ def my_f_torch(w_torch, x_torch):
     objf = -torch.mean(torch.log(torch.matmul(w_torch.T, x_torch)))
     return objf
     
-def my_cvxpy_description():
+def my_g_cvxpy():
     x_var = cp.Variable(n, nonneg=True)
     g = 0
     constr = [cp.sum(x_var) == 1]
@@ -79,13 +93,13 @@ def my_initial_val():
 ```
 Next, with a given `n` by `N` data matrix `W`, the user can define an `OSMM` object.
 ```python
-osmm_prob = OSMM(my_f_torch, my_cvxpy_description, my_initial_val, W)
+osmm_prob = OSMM(my_f_torch, my_g_cvxpy, my_initial_val, W)
 ```
 The solve method is called by
 ```python
 osmm_prob.solve()
 ```
-and a solution is stored in `osmm_prob.method_results["x_best"]`.
+and a solution is stored in `osmm_prob.method_results["x_soln"]`.
 
 For more examples, see the [`examples`](examples/) directory.
 
