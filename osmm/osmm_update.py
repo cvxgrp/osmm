@@ -12,8 +12,8 @@ class OsmmUpdate:
         self.problem_instance = problem_instance
         self.curvature_update = CurvatureUpdate(problem_instance)
 
-    def initialization(self, H_rank, pieces_num, alg_mode, tau_min, ini_by_Hutchison):
-        x_0 = self.problem_instance.get_initial_val()
+    def initialization(self, init_val, H_rank, pieces_num, alg_mode, tau_min, ini_by_Hutchison):
+        x_0 = init_val
         f_0 = self.problem_instance.f_value(x_0)
         if self.problem_instance.eval_validate:
             f_validation_0 = self.problem_instance.f_validate_value(x_0)
@@ -210,17 +210,12 @@ class OsmmUpdate:
                                                               np.linalg.norm(q_k_plus_one),
                                                               np.linalg.norm(f_grad_k_plus_one))
 
-        if self.problem_instance.is_save:
-            self.problem_instance.method_results["time_cost_detail_iters"][0, round_idx] = f_eva_time_cost
-            self.problem_instance.method_results["time_cost_detail_iters"][1, round_idx] = end_evaluate_f_grad_time \
+        self.problem_instance.method_results["time_cost_detail_iters"][0, round_idx] = f_eva_time_cost
+        self.problem_instance.method_results["time_cost_detail_iters"][1, round_idx] = end_evaluate_f_grad_time \
                                                                                            - begin_evaluate_f_grad_time
-            self.problem_instance.method_results["time_cost_detail_iters"][2, round_idx] = end_update_curvature_time \
-                                                                                           - begin_update_curvature_time
-            self.problem_instance.method_results["time_cost_detail_iters"][3, round_idx] = end_solve_time \
+        self.problem_instance.method_results["time_cost_detail_iters"][2, round_idx] = end_solve_time \
                                                                                            - begin_solve_time
-            self.problem_instance.method_results["time_cost_detail_iters"][4, round_idx] = end_line_search_time \
-                                                                                           - begin_line_search_time
-            self.problem_instance.method_results["time_cost_detail_iters"][5, round_idx] = end_evaluate_L_k \
+        self.problem_instance.method_results["time_cost_detail_iters"][3, round_idx] = end_evaluate_L_k \
                                                                                            - begin_evaluate_L_k
         if self.problem_instance.store_x_all_iters or round_idx < pieces_num:
             self.problem_instance.method_results["X_iters"][:, round_idx] = x_k_plus_one
@@ -246,7 +241,7 @@ class OsmmUpdate:
                f_grad_k_plus_one,f_grads_iters_value, f_const_iters_value, G_k_plus_one, diag_H_k_plus_one, \
                lam_k_plus_one, mu_k_plus_one
 
-    def _line_search(self, x_k_plus_half, xk, g_k_plus_half, g_k, objf_k, G_k, lam_k, beta, j_max, alpha, tol=1e-5, ep=1e-15):
+    def _line_search(self, x_k_plus_half, xk, g_k_plus_half, g_k, objf_k, G_k, lam_k, beta, j_max, alpha, ep=1e-15): #tol=1e-5,
         v_k = x_k_plus_half - xk
 
         begin_evaluate_f_time = time.time()
@@ -303,22 +298,15 @@ class OsmmUpdate:
 
     def _update_l_k(self, round_idx, pieces_num, x_k_plus_one, f_k_plus_one, f_grad_k_plus_one, f_grads_iters_value,
                     f_const_iters_value):
-        '''
-        update f_grads_iters_value and f_const_iters_value
-        '''
-        # if alg_mode.add_bundle():
         if round_idx < pieces_num:
             num_iters_remain = pieces_num - round_idx
             f_grads_iters_value[:, round_idx: pieces_num] = \
                 f_grad_k_plus_one.repeat(num_iters_remain).reshape((self.problem_instance.n, num_iters_remain))
             f_const_iters_value[round_idx: pieces_num] = np.ones(num_iters_remain) * \
-                                                     (f_k_plus_one - f_grad_k_plus_one.dot(x_k_plus_one))
+                                                         (f_k_plus_one - f_grad_k_plus_one.dot(x_k_plus_one))
         else:
             f_grads_iters_value[:, round_idx % pieces_num] = f_grad_k_plus_one
             f_const_iters_value[round_idx % pieces_num] = f_k_plus_one - f_grad_k_plus_one.dot(x_k_plus_one)
-        # else:
-        #     f_grads_iters_value[:, :] = f_grad_k_plus_one.reshape((n, 1))
-        #     f_const_iters_value[:] = f_k_plus_one - f_grad_k_plus_one.dot(x_k_plus_one)
         return f_grads_iters_value, f_const_iters_value
 
     def _update_trust_params(self, mu_k, tk, tau_k_plus_one, tau_min, mu_min, mu_max, gamma_inc, gamma_dec):

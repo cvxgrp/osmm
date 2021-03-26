@@ -20,7 +20,7 @@ print("device =", device)
 np.random.seed(10)
 np.seterr(all='raise')
 
-N = 1000000
+N = 10000
 num_horses = 10
 n = 1 + num_horses + num_horses * (num_horses - 1) // 2 + num_horses * (num_horses - 1) * (num_horses - 2) // 6
 n_w = n
