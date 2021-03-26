@@ -32,11 +32,11 @@ solve(W, init_val)
 which specifies the problem and runs the solve method.
 
 ### Required arguments
-The arguments `f_torch` and `g_cvxpy` define the form of the problem.
+For the construction method of the `OSMM` class, the arguments `f_torch` and `g_cvxpy` define the form of the problem.
 * `f_torch` must be a function with two inputs and one output. The first and the second inputs are the PyTorch tensors for the data matrix `W` and the variable vector `x`, respectively. The output is a PyTorch tensor for the scalar function value of `f`.
 * `g_cvxpy` must be a function with no input and four outputs. The first output is a cvxpy variable for `x`, the second one is a cvxpy expression for the objective function in `g`, the third one is a list of constraints contained in `g`, and the last output is a list of additional variables. Note that returning additional variables in the last output is optional, and is only for accessing their solutions.
 
-The arguments `W` and `init_val` in the solve method specify the problem to be solved.
+For the solve method, he argument `W` specifies the problem to be solved, and `init_val` gives an initial value.
 * `W` must be a numpy matrix with dimension `d` by `N`, where `N` is the number of data points.
 * `init_val` must be a numpy array for an initial value of `x`, which must be in the domain of `f`.
 
@@ -49,7 +49,7 @@ subject to x >= 0, x'1 = 1,
 where `x` is an `n` dimensional variable, and `w_i` for `i=1,...,N` are given data samples.
 
 The user implements the objective function as `f` by PyTorch and the indicator function of the constraints as `g` by cvxpy,
-and gives the data matrix `W` and an initial value of `x`.
+and gives the data matrix `W` and an initial value.
 ```python
 n = 100
 N = 10000
@@ -91,7 +91,7 @@ There are some optional arguments for the `solve` method.
 *  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. The default value is `20`. Please see the paper for details.
 
 ### Return value
-Results after solving are stored in the dictonary `method_results` which is an attribute of an `OSMM` object.
+Results after solving are stored in the dictonary `method_results` which is an attribute of an `OSMM` object. The keys are as follows.
 * `"soln"` stores a solution of `x`.
 * `"soln_additional_vars"` stores (a list of) solutions of the addtional variables in the list given by the last output of `g_cvxpy`.
 * `"objf_iters"` stores the objective value versus iterations.
