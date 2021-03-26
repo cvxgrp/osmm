@@ -3,9 +3,11 @@
 ```
 minimize f(x, W) + g(x),
 ```
-where `x` is the variable, and `W` is a given data matrix. 
+where `x` is the variable, and `W` contains parameters that specify `f`. 
 The oracle function `f( ,W)` is convex in `x`, defined by PyTorch, and can be automatically differentiated by PyTorch. 
 The structured function `g` is convex, defined by cvxpy, and can contain constraints and variables additional to `x`.
+
+`osmm` is suitable for cases where `W` contains a large data matrix.
 
 The implementation is based on our paper Minimizing Oracle-Structured Composite Functions [XXX add link].
 
@@ -32,12 +34,12 @@ solve(W, init_val)
 which specifies the problem and runs the solve method.
 
 ### Required arguments
-The arguments `f_torch` and `g_cvxpy` define the form of the problem.
-* `f_torch` must be a function with two inputs and one output. The first and the second inputs are the PyTorch tensors for the data matrix `W` and the variable vector `x`, respectively. The output is a PyTorch tensor for the scalar function value of `f`.
-* `g_cvxpy` must be a function with no input and four outputs. The first output is a cvxpy variable for `x`, the second one is a cvxpy expression for the objective function in `g`, the third one is a list of constraints contained in `g`, and the last output is a list of additional variables.
+For the construction method of the `OSMM` class, the arguments `f_torch` and `g_cvxpy` define the form of the problem.
+* `f_torch` must be a function with two inputs and one output. The first and the second inputs are the PyTorch tensors for `W` and `x`, respectively. The output is a PyTorch tensor for the scalar function value of `f`.
+* `g_cvxpy` must be a function with no input and four outputs. The first output is a cvxpy variable for `x`, the second one is a cvxpy expression for the objective function in `g`, the third one is a list of constraints contained in `g`, and the last one is a list of additional variables. Note that returning additional variables in the last output is optional, and is only for accessing their solutions.
 
-The arguments `W` and `init_val` in the solve method specify the problem to be solved.
-* `W` must be a numpy matrix with dimension `d` by `N`, where `N` is the number of data points.
+For the solve method, the argument `W` specifies the problem to be solved, and `init_val` gives an initial value.
+* `W` must be a numpy matrix or a numpy array.
 * `init_val` must be a numpy array for an initial value of `x`, which must be in the domain of `f`.
 
 ### Example
@@ -48,8 +50,7 @@ subject to x >= 0, x'1 = 1,
 ```
 where `x` is an `n` dimensional variable, and `w_i` for `i=1,...,N` are given data samples.
 
-The user implements the objective function as `f` by PyTorch and the indicator function of the constraints as `g` by cvxpy,
-and gives the data matrix `W` and an initial value of `x`.
+The user implements the objective function as `f` by PyTorch and the indicator function of the constraints as `g` by cvxpy, and gives the data matrix `W` and an initial value.
 ```python
 n = 100
 N = 10000
@@ -65,7 +66,7 @@ def my_g_cvxpy():
     additional_vars = []
     return x_var, g, constr, additional_vars
     
-W = np.random.uniform(low=0.5, high=1.0, size=(n, N))
+W = np.random.uniform(low=0.5, high=1.5, size=(n, N))
 
 init_val = np.ones(n) / n
 ```
@@ -75,7 +76,6 @@ osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
 ```
 Then the solve method is called by
 ```python
-
 osmm_prob.solve(W, init_val)
 ```
 and a solution for `x` is stored in `osmm_prob.method_results["soln"]`.
@@ -84,21 +84,22 @@ For more examples, see the [`examples`](examples/) directory.
 
 ### Optional arguments
 There are some optional arguments for the `solve` method.
-* `W_validate` is a numpy matrix with dimension `d` by `N`. For problems in which `W` is a sampling matrix, `W_validate` can be provided as another sampling matrix used by `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy.
+* `W_validate` is a numpy matrix or a numpy array in the same shape as `W`. When `W` is a sampling matrix, `W_validate` can be provided as another sampling matrix used by `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy.
+* `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. The default value is `20`.
+*  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. The default value is `20`. Please see the paper for details.
 * `solver` must be one of the solvers supported by cvxpy.
 * `max_iter` is the maximum number of iterations.
-* `r` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `r=0` the method becomes a proximal bundle algorithm. The default value is `20`.
-*  `M` is the memory in the piecewise affine bundle used in the method, and with `M=0` the method becomes a proximal quasi-Newton algorithm. The default value is `20`. Please see the paper for details on `r` and `M`.
 
 ### Return value
-Results after solving are stored in the dictonary `method_results` which is an attribute of an `OSMM` object.
-* `"soln"` stores the solution of `x`.
+Results after solving are stored in the dictonary `method_results` which is an attribute of an `OSMM` object. The keys are as follows.
+* `"soln"` stores a solution of `x`.
+* `"soln_additional_vars"` stores (a list of) solutions of the addtional variables in the list given by the last output of `g_cvxpy`.
 * `"objf_iters"` stores the objective value versus iterations.
 * `"lower_bound_iters"` stores lower bound on the optimal objective value versus iterations.
 * `"iters_taken"` stores the actual number of iterations taken.
-* If `W_validate` is provided, then `"objf_validate_iters"` stores the validate objective value versus iterations.
+* `"objf_validate_iters"` stores the validate objective value versus iterations, when `W_validate` is provided.
 * More detailed histories during the iterations are as follows.
-  * `"var_iters"` stores the update of `x` versus iterations. It can be turned off by setting the argument `store_x_all_iters=False` in the `.solve()` method.
+  * `"var_iters"` stores the update of `x` versus iterations. It can be turned off by setting the argument `store_var_all_iters=False` in the `solve()` method.
   * `"runtime_iters"` stores the time cost per iteration versus iterations.
   * `"opt_res_iters"` stores the norm of the optimality residue versus iterations.
   * `"f_grad_norm_iters"` stores the norm of the gradient of `f` versus iterations.
