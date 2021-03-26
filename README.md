@@ -66,7 +66,7 @@ def my_g_cvxpy():
     additional_vars = []
     return x_var, g, constr, additional_vars
     
-W = np.random.uniform(low=0.5, high=1.0, size=(n, N))
+W = np.random.uniform(low=0.5, high=1.5, size=(n, N))
 
 init_val = np.ones(n) / n
 ```
@@ -76,7 +76,6 @@ osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
 ```
 Then the solve method is called by
 ```python
-
 osmm_prob.solve(W, init_val)
 ```
 and a solution for `x` is stored in `osmm_prob.method_results["soln"]`.
