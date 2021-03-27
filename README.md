@@ -84,13 +84,14 @@ For more examples, see the [`examples`](examples/) directory.
 
 ### Optional arguments
 There are some optional arguments for the `solve` method.
-* `W_validate` is a numpy matrix, a numpy array, or a scalar in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix used by `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy.
+* `W_validate` is a numpy matrix, a numpy array, or a scalar in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy.
 * `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. The default value is `20`.
 *  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. The default value is `20`. Please see the paper for details.
-* `solver` must be one of the solvers supported by cvxpy.
 * `max_iter` is the maximum number of iterations.
+* `solver` must be one of the solvers supported by cvxpy.
 
-### Return value
+
+### Return values
 Results after solving are stored in the dictonary `method_results` which is an attribute of an `OSMM` object. The keys are as follows.
 * `"soln"` stores a solution of `x`.
 * `"soln_additional_vars"` stores (a list of) solutions of the addtional variables in the list given by the last output of `g_cvxpy`.
