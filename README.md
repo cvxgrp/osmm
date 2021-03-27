@@ -46,7 +46,7 @@ For the solve method, the argument `W` specifies the problem to be solved, and `
 ### Example
 We take the following Kelly gambling problem as an example
 ```
-minimize - \sum_{i=1}^N [log(w_i'x)] / N
+minimize - \sum_{i=1}^N log(w_i'x) / N
 subject to x >= 0, x'1 = 1,
 ```
 where `x` is an `n` dimensional variable, and `w_i` for `i=1,...,N` are given data.
@@ -55,13 +55,13 @@ The user implements the objective function as `f` by PyTorch and the indicator f
 ```python
 n = 100
 N = 10000
+x_var = cp.Variable(n, nonneg=True)
 
 def my_f_torch(w_torch, x_torch):
     objf = -torch.mean(torch.log(torch.matmul(w_torch.T, x_torch)))
     return objf
     
 def my_g_cvxpy():
-    x_var = cp.Variable(n, nonneg=True)
     g = 0
     constr = [cp.sum(x_var) == 1]
     additional_vars = []
@@ -79,7 +79,7 @@ Then the solve method is called by
 ```python
 osmm_prob.solve(W, init_val)
 ```
-and a solution for `x` is stored in `osmm_prob.method_results["soln"]`.
+and a solution for `x` can be accessed by `x_var.value`. If `x_var` is defined as a local variable in `g_cvxpy`, then its solution can be obtained in  `osmm_prob.method_results["soln"]`.
 
 For more examples, see the [`examples`](examples/) directory.
 
