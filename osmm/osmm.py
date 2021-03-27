@@ -18,8 +18,13 @@ class OSMM:
         try:
             _ = self.g_objf.value
         except Exception as e:
-            self.g_objf = 0 * cp.sum(self.x_var_cvxpy) ##############################################
+            self.g_objf = cp.Parameter(value=0)
         self.n = self.x_var_cvxpy.size
+        if len(self.x_var_cvxpy.shape) <= 1:
+            self.n0 = self.n
+            self.n1 = 0
+        else:
+            self.n0, self.n1 = self.x_var_cvxpy.shape
         self.store_var_all_iters = True
         self.method_results = {}
 
@@ -56,12 +61,20 @@ class OSMM:
             f_torch.backward(create_graph=True)
             grad_x = x_torch.grad
             grad_x.requires_grad_(True)
-            v = (np.random.rand(self.n) < 0.5) * 2 - 1.0
-            v_torch = torch.tensor(v, dtype=torch.float, requires_grad=False)
-            gv_objf = torch.matmul(v_torch.T, grad_x)
-            gv_objf.backward()
-            Hv = x_torch.grad.detach().cpu().numpy()
-            vTHv = float(v.T.dot(Hv))
+            if self.n1 == 0:
+                v = (np.random.rand(self.n) < 0.5) * 2 - 1.0
+                v_torch = torch.tensor(v, dtype=torch.float, requires_grad=False)
+                gv_objf = torch.matmul(v_torch.T, grad_x)
+                gv_objf.backward()
+                Hv = x_torch.grad.detach().cpu().numpy()
+                vTHv = float(v.T.dot(Hv))
+            else:
+                v = (np.random.rand(self.n0, self.n1) < 0.5) * 2 - 1.0
+                v_torch = torch.tensor(v, dtype=torch.float, requires_grad=False)
+                gv_objf = torch.sum(v_torch * grad_x)
+                gv_objf.backward()
+                Hv = x_torch.grad.detach().cpu().numpy()
+                vTHv = float(np.sum(v * Hv))
             new_est_tr = (est_tr * it + float(vTHv)) / (it + 1)
             if np.abs(new_est_tr - est_tr) < tol * np.abs(est_tr):
                 break
@@ -77,23 +90,34 @@ class OSMM:
               mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8, alpha=0.05, beta=0.5, j_max=10, ep=1e-15,
               eps_gap_abs=1e-4, eps_gap_rel=1e-4, eps_res_abs=1e-4, eps_res_rel=1e-4):
 
+        if alg_mode != AlgMode.Bundle and alg_mode != AlgMode.LowRankQNBundle and self.n1 != 0:
+            alg_mode = AlgMode.LowRankQNBundle
+            hessian_rank = 20
+            gradient_memory = 20
+        if hessian_rank == 0:
+            alg_mode = AlgMode.Bundle
+            hessian_rank = 1
+        if gradient_memory <= 0:
+            gradient_memory = 1
+        if alg_mode == AlgMode.Exact or alg_mode == AlgMode.BFGSBundle:
+            hessian_rank = self.n
+
         self.W_torch = torch.tensor(W, dtype=torch.float, requires_grad=False)
         if W_validate is not None:
             self.W_torch_validate = torch.tensor(W_validate, dtype=torch.float, requires_grad=False)
 
-        if alg_mode == AlgMode.Exact or alg_mode == AlgMode.BFGSBundle:
-            hessian_rank = self.n
-        if hessian_rank == 0:
-            alg_mode = AlgMode.Bundle
-            hessian_rank = 20
-
         self.store_var_all_iters = store_var_all_iters
-
         if self.store_var_all_iters:
-            self.method_results["var_iters"] = np.zeros((self.n, max_iter))
+            if self.n1 == 0:
+                self.method_results["var_iters"] = np.zeros((self.n, max_iter))
+            else:
+                self.method_results["var_iters"] = np.zeros((self.n0, self.n1, max_iter))
         else:
-            self.method_results["var_iters"] = np.zeros((self.n, gradient_memory)) ##############
-        self.method_results["soln"] = np.zeros(self.n)
+            if self.n1 == 0:
+                self.method_results["var_iters"] = np.zeros((self.n, 1))
+            else:
+                self.method_results["var_iters"] = np.zeros((self.n0, self.n1, 1))
+        self.method_results["soln"] = None
         self.method_results["soln_additional_vars"] = [None] * len(self.g_additional_vars)
         self.method_results["objf_iters"] = np.zeros(max_iter)
         self.method_results["objf_validate_iters"] = np.zeros(max_iter)
@@ -117,8 +141,10 @@ class OSMM:
             = osmm_method.initialization(init_val, hessian_rank, gradient_memory, alg_mode, tau_min, init_by_Hutchison)
         lower_bound_k = -np.inf
         mu_k = mu_0
-
-        self.method_results["var_iters"][:, 0] = x_k
+        if self.n1 == 0:
+            self.method_results["var_iters"][:, 0] = x_k
+        else:
+            self.method_results["var_iters"][:, :, 0] = x_k
         self.method_results["objf_iters"][0] = objf_k
         self.method_results["lambd_iters"][0] = lam_k
         if self.W_torch_validate is not None:
@@ -128,12 +154,10 @@ class OSMM:
             self.method_results["soln_additional_vars"] = additional_vars_value
 
         update_func = partial(osmm_method.update_func, alg_mode=alg_mode, hessian_rank=hessian_rank,
-                              gradient_memory=gradient_memory, solver=solver,
-                              mu_min=mu_min, tau_min=tau_min, mu_max=mu_max, ep=ep,
-                              gamma_inc=gamma_inc, gamma_dec=gamma_dec,
-                              beta=beta, j_max=j_max, alpha=alpha, num_iters_eval_Lk=num_iters_eval_Lk,
-                              eps_gap_abs=eps_gap_abs, eps_gap_rel=eps_gap_rel, eps_res_abs=eps_res_abs,
-                              eps_res_rel=eps_res_rel)
+                              gradient_memory=gradient_memory, solver=solver, num_iters_eval_Lk=num_iters_eval_Lk,
+                              mu_min=mu_min, tau_min=tau_min, mu_max=mu_max, gamma_inc=gamma_inc, gamma_dec=gamma_dec,
+                              beta=beta, j_max=j_max, alpha=alpha, ep=ep, eps_gap_abs=eps_gap_abs,
+                              eps_gap_rel=eps_gap_rel, eps_res_abs=eps_res_abs, eps_res_rel=eps_res_rel)
 
         iter_idx = 1
         stopping_criteria_satisfied = False
@@ -158,7 +182,7 @@ class OSMM:
             diag_H_k = diag_H_k_plus_one
             lam_k = lam_k_plus_one
             mu_k = mu_k_plus_one
-            if objf_k <= np.min(self.method_results["objf_iters"][1:iter_idx]):
+            if objf_k <= np.min(self.method_results["objf_iters"][0:iter_idx]):
                 self.method_results["soln"] = x_k_plus_one
                 self.method_results["soln_additional_vars"] = additional_vars_value
 
