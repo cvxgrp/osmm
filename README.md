@@ -48,7 +48,7 @@ We take the following Kelly gambling problem as an example
 minimize - \sum_{i=1}^N [log(w_i'x)] / N
 subject to x >= 0, x'1 = 1,
 ```
-where `x` is an `n` dimensional variable, and `w_i` for `i=1,...,N` are given data samples.
+where `x` is an `n` dimensional variable, and `w_i` for `i=1,...,N` are given data.
 
 The user implements the objective function as `f` by PyTorch and the indicator function of the constraints as `g` by cvxpy, and gives the data matrix `W` and an initial value.
 ```python
