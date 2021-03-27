@@ -7,8 +7,9 @@ where `x` is the variable, and `W` contains data and parameters that specify `f`
 The oracle function `f( ,W)` is convex in `x`, defined by PyTorch, and can be automatically differentiated by PyTorch. 
 The structured function `g` is convex, defined by cvxpy, and can contain constraints and variables additional to `x`.
 
-`osmm` is suitable for cases where `W` contains a large data matrix.
+Variable `x` can be a scalar, a vector, or a matrix.
 
+`osmm` is suitable for cases where `W` contains a large data matrix.
 The implementation is based on our paper Minimizing Oracle-Structured Composite Functions [XXX add link].
 
 ## Installation
@@ -38,9 +39,9 @@ For the construction method of the `OSMM` class, the arguments `f_torch` and `g_
 * `f_torch` must be a function with two inputs and one output. The first and the second inputs are the PyTorch tensors for `W` and `x`, respectively. The output is a PyTorch tensor for the scalar function value of `f`.
 * `g_cvxpy` must be a function with no input and four outputs. The first output is a cvxpy variable for `x`, the second one is a cvxpy expression for the objective function in `g`, the third one is a list of constraints contained in `g`, and the last one is a list of additional variables. Note that returning additional variables in the last output is optional, and is only for accessing their solutions.
 
-For the solve method, the argument `W` specifies the problem to be solved, and `init_val` gives an initial value.
+For the solve method, the argument `W` specifies the problem to be solved, and `init_val` gives an initial value of `x`.
 * `W` must be a numpy matrix, a numpy array, or a scalar.
-* `init_val` must be a numpy array for an initial value of `x`, which must be in the domain of `f`.
+* `init_val` must be a a numpy matrix, a numpy array, or a scalar that is in the same shape as `x`. It must be in the domain of `f`.
 
 ### Example
 We take the following Kelly gambling problem as an example
@@ -92,9 +93,11 @@ There are some optional arguments for the `solve` method.
 
 
 ### Return values
+A solution for `x` and the other variables in `g` can be obtained in the `value` attribute of the corresponding cvxpy variables, if the user defines these variables as global so that they can be accessed outside the `g_cvxpy` function. Otherwise, a solution can be obtained in the following result ditionary.
+
 Results after solving are stored in the dictonary `method_results` which is an attribute of an `OSMM` object. The keys are as follows.
-* `"soln"` stores a solution of `x`.
-* `"soln_additional_vars"` stores (a list of) solutions of the addtional variables in the list given by the last output of `g_cvxpy`.
+* `"soln"` stores a solution for `x`.
+* `"soln_additional_vars"` stores (a list of) solutions for the addtional variables in the list given by the last output of `g_cvxpy`.
 * `"objf_iters"` stores the objective value versus iterations.
 * `"lower_bound_iters"` stores lower bound on the optimal objective value versus iterations.
 * `"iters_taken"` stores the actual number of iterations taken.
