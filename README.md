@@ -3,7 +3,7 @@
 ```
 minimize f(x, W) + g(x),
 ```
-where `x` is the variable, and `W` contains parameters that specify `f`. 
+where `x` is the variable, and `W` contains data and parameters that specify `f`. 
 The oracle function `f( ,W)` is convex in `x`, defined by PyTorch, and can be automatically differentiated by PyTorch. 
 The structured function `g` is convex, defined by cvxpy, and can contain constraints and variables additional to `x`.
 
@@ -39,7 +39,7 @@ For the construction method of the `OSMM` class, the arguments `f_torch` and `g_
 * `g_cvxpy` must be a function with no input and four outputs. The first output is a cvxpy variable for `x`, the second one is a cvxpy expression for the objective function in `g`, the third one is a list of constraints contained in `g`, and the last one is a list of additional variables. Note that returning additional variables in the last output is optional, and is only for accessing their solutions.
 
 For the solve method, the argument `W` specifies the problem to be solved, and `init_val` gives an initial value.
-* `W` must be a numpy matrix or a numpy array.
+* `W` must be a numpy matrix, a numpy array, or a scalar.
 * `init_val` must be a numpy array for an initial value of `x`, which must be in the domain of `f`.
 
 ### Example
@@ -84,7 +84,7 @@ For more examples, see the [`examples`](examples/) directory.
 
 ### Optional arguments
 There are some optional arguments for the `solve` method.
-* `W_validate` is a numpy matrix or a numpy array in the same shape as `W`. When `W` is a sampling matrix, `W_validate` can be provided as another sampling matrix used by `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy.
+* `W_validate` is a numpy matrix, a numpy array, or a scalar in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix used by `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy.
 * `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. The default value is `20`.
 *  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. The default value is `20`. Please see the paper for details.
 * `solver` must be one of the solvers supported by cvxpy.
