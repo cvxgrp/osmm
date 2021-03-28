@@ -37,13 +37,13 @@ which specifies the problem and runs the solve method.
 ### Required arguments
 For the construction method of the `OSMM` class, the arguments `f_torch` and `g_cvxpy` define the form of the problem.
 * `f_torch` must be a function with two inputs and one output. The first and the second inputs are the PyTorch tensors for `W` and `x`, respectively. The output is a PyTorch tensor for the scalar function value of `f`.
-* `g_cvxpy` must be a function with no input and four outputs. The first output is a cvxpy variable for `x`, the second one is a cvxpy expression for the objective function in `g`, the third one is a list of constraints contained in `g`, and the last one is a list of additional variables. Note that returning additional variables in the last output is optional, and is only for accessing their solutions.
+* `g_cvxpy` must be a function with no input and three outputs. The first output is a cvxpy variable for `x`, the second one is a cvxpy expression for the objective function in `g`, the third one is a list of constraints contained in `g`.
 
 For the solve method, the argument `W` specifies the problem to be solved, and `init_val` gives an initial value of `x`.
-* `W` must be a numpy matrix, a numpy array, or a scalar.
-* `init_val` must be a a numpy matrix, a numpy array, or a scalar that is in the same shape as `x`. It must be in the domain of `f`.
+* `W` must be a scalar, a numpy array, or a numpy matrix.
+* `init_val` must be a scalar, a numpy array, or a numpy matrix that is in the same shape as `x`. It must be in the domain of `f`.
 
-### Example
+### Basic example
 We take the following Kelly gambling problem as an example
 ```
 minimize - \sum_{i=1}^N log(w_i'x) / N
@@ -51,8 +51,14 @@ subject to x >= 0, x'1 = 1,
 ```
 where `x` is an `n` dimensional variable, and `w_i` for `i=1,...,N` are given data.
 
-The user implements the objective function as `f` by PyTorch and the indicator function of the constraints as `g` by cvxpy, and gives the data matrix `W` and an initial value.
+The user implements the objective function as `f` by PyTorch and the indicator function of the constraints as `g` by cvxpy, 
+and gives the data matrix `W` and an initial value.
 ```python
+import numpy as np
+import cvxpy as cp
+import torch
+from osmm import OSMM
+
 n = 100
 N = 10000
 x_var = cp.Variable(n, nonneg=True)
@@ -71,15 +77,12 @@ W = np.random.uniform(low=0.5, high=1.5, size=(n, N))
 
 init_val = np.ones(n) / n
 ```
-Next, the user can define an `OSMM` object by
+Then the user defines an `OSMM` object, calls the solve method, and obtains a solution.
 ```python
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
-```
-Then the solve method is called by
-```python
 osmm_prob.solve(W, init_val)
+print("x solution = ", x_var.value) 
 ```
-and a solution for `x` can be accessed by `x_var.value`. If `x_var` is defined as a local variable in `g_cvxpy`, then its solution can be obtained in  `osmm_prob.method_results["soln"]`.
 
 For more examples, see the [`examples`](examples/) directory.
 
