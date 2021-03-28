@@ -54,9 +54,9 @@ where `x` is an `n` dimensional variable, and `w_i` for `i=1,...,N` are given da
 Here the objective function is `f`, the indicator function of the constraints is `g`, and the data matrix `W = [w_1, ..., w_N]`.
 The code is as follows.
 ```python
+import torch
 import numpy as np
 import cvxpy as cp
-import torch
 from osmm import OSMM
 
 n = 100
@@ -130,4 +130,43 @@ More detailed results are stored in the dictonary `method_results`, which is an 
   * `"num_f_evas_line_search_iters"` stores the number of `f` evaluations in the line search versus iterations.
   * `"time_cost_detail_iters"` stores the time costs of evaluating `f` and gradient of `f` (once), the tentative update, and the lower bound versus iterations.
 
+## Efficiency
+`osmm` is efficient when `W` contains a large data matrix, and can be more efficient if PyTorch uses a GPU to compute `f` and its gradient.
+
+We take the Kelly gambling problem as an example again. 
+The variable `x_var`, the functions `my_f_torch` and `my_g_cvxpy`, and `init_val` have been defined in the above.
+We compare the time cost of `osmm` with cvxpy on a CPU, and show that `osmm` is not as efficient as cvxpy when the data matrix is small with `N=100`,
+but is more efficient when the data matrix is large with `N=10,000`.
+
+```python
+import time as time
+
+N = 100
+W_small = np.random.uniform(low=0.5, high=1.5, size=(n, N))
+
+t1 = time.time()
+opt_obj_val = osmm_prob.solve(W_small, init_val)
+print("N = 100, osmm time cost = %.2f" % (time.time() - t1))
+# N = 100, osmm time cost = 0.38
+
+cvx_prob = cp.Problem(cp.Minimize(-cp.sum(cp.log(W_small.T @ x_var)) / N), [cp.sum(x_var) == 1])
+t2 = time.time()
+cvx_prob.solve()
+print("N = 100, cvxpy time cost = %.2f" % (time.time() - t2))
+# N = 100, cvxpy time cost = 0.04
+
+N = 10000
+W_large = np.random.uniform(low=0.5, high=1.5, size=(n, N))
+
+t3 = time.time()
+opt_obj_val = osmm_prob.solve(W_large, init_val)
+print("N = 10,000, osmm time cost = %.2f" % (time.time() - t3))
+# N = 10,000, osmm time cost = 0.67
+
+cvx_prob = cp.Problem(cp.Minimize(-cp.sum(cp.log(W_large.T @ x_var)) / N), [cp.sum(x_var) == 1])
+t4 = time.time()
+cvx_prob.solve()
+print("N = 10,000, cvxpy time cost = %.2f" % (time.time() - t4))
+# N = 10,000, cvxpy time cost = 2.37
+```
 ## Citing
