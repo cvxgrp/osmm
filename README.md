@@ -32,7 +32,7 @@ which generates an object defining the form of the problem, and a member functio
 ```python
 solve(W, init_val)
 ```
-which specifies the problem and runs the solve method.
+which specifies the problem, runs the solve method, and returns the optimal objective value.
 
 ### Required arguments
 For the construction method of the `OSMM` class, the arguments `f_torch` and `g_cvxpy` define the form of the problem.
@@ -70,8 +70,7 @@ def my_f_torch(w_torch, x_torch):
 def my_g_cvxpy():
     g = 0
     constr = [cp.sum(x_var) == 1]
-    additional_vars = []
-    return x_var, g, constr, additional_vars
+    return x_var, g, constr
     
 W = np.random.uniform(low=0.5, high=1.5, size=(n, N))
 
@@ -80,8 +79,9 @@ init_val = np.ones(n) / n
 Then the user defines an `OSMM` object, calls the solve method, and obtains a solution.
 ```python
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
-osmm_prob.solve(W, init_val)
-print("x solution = ", x_var.value) 
+result = osmm_prob.solve(W, init_val)
+print("optimal objective value =", result)
+print("x solution = ", x_var.value)
 ```
 
 For more examples, see the [`examples`](examples/) directory.
@@ -91,16 +91,20 @@ There are some optional arguments for the `solve` method.
 * `W_validate` is a numpy matrix, a numpy array, or a scalar in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy.
 * `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. The default value is `20`.
 *  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. The default value is `20`. Please see the paper for details.
-* `max_iter` is the maximum number of iterations.
+* `max_iter` is the maximum number of iterations. The default value is `200`.
 * `solver` must be one of the solvers supported by cvxpy.
-
+* `store_var_all_iters` is a boolean giving the choice of whether the updates of `x` in all iterations are stored. The default value is `True`.
+* The following tolerances are used in the stopping criteria.
+    * `eps_gap_abs` is the absolute tolerance on the gap between upper and lower bounds on the objective value. The default value is `1e-4`.
+    * `eps_gap_rel` is the relative tolerance on the gap between upper and lower bounds on the objective value. The default value is `1e-4`.
+    * `eps_res_abs` is the absolute tolerance on a residue for an optimality condition. The default value is `1e-4`.
+    * `eps_res_rel` is the relative tolerance on a residue for an optimality condition. The default value is `1e-4`.
 
 ### Return values
-A solution for `x` and the other variables in `g` can be obtained in the `value` attribute of the corresponding cvxpy variables, if the user defines these variables as global so that they can be accessed outside the `g_cvxpy` function. Otherwise, a solution can be obtained in the following result ditionary.
+The optimal objective is returned by the `solve` method.
+A solution for `x` and the other variables in `g` can be obtained in the `value` attribute of the corresponding cvxpy variables.
 
-Results after solving are stored in the dictonary `method_results` which is an attribute of an `OSMM` object. The keys are as follows.
-* `"soln"` stores a solution for `x`.
-* `"soln_additional_vars"` stores (a list of) solutions for the addtional variables in the list given by the last output of `g_cvxpy`.
+More detailed results are stored in the dictonary `method_results`, which is an attribute of an `OSMM` object. The keys are as follows.
 * `"objf_iters"` stores the objective value versus iterations.
 * `"lower_bound_iters"` stores lower bound on the optimal objective value versus iterations.
 * `"iters_taken"` stores the actual number of iterations taken.
