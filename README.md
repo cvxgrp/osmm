@@ -51,8 +51,8 @@ subject to x >= 0, x'1 = 1,
 ```
 where `x` is an `n` dimensional variable, and `w_i` for `i=1,...,N` are given data.
 
-The user implements the objective function as `f` by PyTorch and the indicator function of the constraints as `g` by cvxpy, 
-and gives the data matrix `W` and an initial value.
+Here the objective function is `f`, the indicator function of the constraints is `g`, and the data matrix `W = [w_1, ..., w_N]`.
+The code is as follows.
 ```python
 import numpy as np
 import cvxpy as cp
@@ -61,24 +61,30 @@ from osmm import OSMM
 
 n = 100
 N = 10000
+# define cvxpy variable for x
 x_var = cp.Variable(n, nonneg=True)
 
+# define f by torch
 def my_f_torch(w_torch, x_torch):
     objf = -torch.mean(torch.log(torch.matmul(w_torch.T, x_torch)))
     return objf
-    
+
+# define g by cvxpy
 def my_g_cvxpy():
     g = 0
     constr = [cp.sum(x_var) == 1]
     return x_var, g, constr
-    
+
+# generate data matrix
 W = np.random.uniform(low=0.5, high=1.5, size=(n, N))
 
+# generate initial value for x
 init_val = np.ones(n) / n
-```
-Then the user defines an `OSMM` object, calls the solve method, and obtains a solution.
-```python
+
+# define an OSMM object
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
+
+# call the solve method
 result = osmm_prob.solve(W, init_val)
 print("optimal objective value =", result)
 print("x solution = ", x_var.value)
