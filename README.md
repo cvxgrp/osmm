@@ -61,32 +61,34 @@ from osmm import OSMM
 
 n = 100
 N = 10000
-# define cvxpy variable for x
+
+# Define a cvxpy variable for x.
 x_var = cp.Variable(n, nonneg=True)
 
-# define f by torch
+# Define f by torch.
 def my_f_torch(w_torch, x_torch):
     objf = -torch.mean(torch.log(torch.matmul(w_torch.T, x_torch)))
     return objf
 
-# define g by cvxpy
+# Define g by cvxpy.
 def my_g_cvxpy():
     g = 0
     constr = [cp.sum(x_var) == 1]
     return x_var, g, constr
 
-# generate data matrix
+# Generate the data matrix.
 W = np.random.uniform(low=0.5, high=1.5, size=(n, N))
 
-# generate initial value for x
+# Generate an initial value for x.
 init_val = np.ones(n) / n
 
-# define an OSMM object
+# Define an OSMM object.
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
 
-# call the solve method
+# The optimal objective is returned by the solve method
 result = osmm_prob.solve(W, init_val)
-print("optimal objective value =", result)
+
+# A solution for x is stored in x_var.value.
 print("x solution = ", x_var.value)
 ```
 
