@@ -12,13 +12,22 @@ class OSMM:
     def __init__(self, f_torch, g_cvxpy):
         self.f_torch = f_torch
         self.f_hess = self.f_hess_value
-        self.W_torch = None
-        self.W_torch_validate = None
-        self.x_var_cvxpy, self.g_objf, self.g_constrs, self.g_additional_vars = g_cvxpy()
+        self.x_var_cvxpy, self.g_objf, self.g_constrs = g_cvxpy()
+
         try:
             _ = self.g_objf.value
         except Exception as e:
             self.g_objf = cp.Parameter(value=0)
+
+        self.g_additional_vars = []
+        for var in self.g_objf.variables():
+            if var is not self.x_var_cvxpy and var not in self.g_additional_vars:
+                self.g_additional_vars.append(var)
+        for constr in self.g_constrs:
+            for var in constr.variables():
+                if var is not self.x_var_cvxpy and var not in self.g_additional_vars:
+                    self.g_additional_vars.append(var)
+
         self.n = self.x_var_cvxpy.size
         if len(self.x_var_cvxpy.shape) <= 1:
             self.n0 = self.n
@@ -27,6 +36,8 @@ class OSMM:
             self.n0, self.n1 = self.x_var_cvxpy.shape
         self.store_var_all_iters = True
         self.method_results = {}
+        self.W_torch = None
+        self.W_torch_validate = None
 
     def _f(self, x):
         x_torch = torch.tensor(x, dtype=torch.float, requires_grad=True)
@@ -86,7 +97,7 @@ class OSMM:
 
     def solve(self, W, init_val, W_validate=None, max_iter=200, hessian_rank=20, gradient_memory=20, solver="ECOS",
               alg_mode=AlgMode.LowRankQNBundle, store_var_all_iters=True,
-              init_by_Hutchison=True, stop_early=True, num_iters_eval_Lk=10, tau_min=1e-3, mu_min=1e-4, mu_max=1e5,
+              init_by_Hutchinson=True, stop_early=True, num_iters_eval_Lk=10, tau_min=1e-3, mu_min=1e-4, mu_max=1e5,
               mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8, alpha=0.05, beta=0.5, j_max=10, ep=1e-15,
               eps_gap_abs=1e-4, eps_gap_rel=1e-4, eps_res_abs=1e-4, eps_res_rel=1e-4):
 
@@ -132,13 +143,13 @@ class OSMM:
         self.method_results["num_f_evas_line_search_iters"] = np.zeros(max_iter)
         self.method_results["runtime_iters"] = np.zeros(max_iter)
         self.method_results["time_cost_detail_iters"] = np.zeros((4, max_iter))
-        self.method_results["iters_taken"] = max_iter
+        self.method_results["iters_taken"] = 0
 
         osmm_method = OsmmUpdate(self)
 
         subprob, x_k, objf_k, objf_validate_k, f_k, f_grad_k, g_k, lam_k, f_grads_iters_value, f_const_iters_value, \
         G_k, diag_H_k, additional_vars_value \
-            = osmm_method.initialization(init_val, hessian_rank, gradient_memory, alg_mode, tau_min, init_by_Hutchison)
+            = osmm_method.initialization(init_val, hessian_rank, gradient_memory, alg_mode, tau_min, init_by_Hutchinson)
         lower_bound_k = -np.inf
         mu_k = mu_0
         if self.n1 == 0:
@@ -186,5 +197,10 @@ class OSMM:
                 self.method_results["soln"] = x_k_plus_one
                 self.method_results["soln_additional_vars"] = additional_vars_value
 
+        self.x_var_cvxpy.value = self.method_results["soln"]
+        for i in range(len(self.g_additional_vars)):
+            var = self.g_additional_vars[i]
+            var.value = self.method_results["soln_additional_vars"][i]
         print("      Time elapsed (secs): %f." % np.sum(self.method_results["runtime_iters"]))
         print("")
+        return np.min(self.method_results["objf_iters"][0:self.method_results["iters_taken"] + 1])
