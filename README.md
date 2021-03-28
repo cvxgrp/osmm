@@ -85,8 +85,8 @@ init_val = np.ones(n) / n
 # Define an OSMM object.
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
 
-# The optimal objective is returned by the solve method
-result = osmm_prob.solve(W, init_val)
+# Call the solve method, and the optimal objective value is returned by it.
+opt_obj_val = osmm_prob.solve(W, init_val)
 
 # A solution for x is stored in x_var.value.
 print("x solution = ", x_var.value)
