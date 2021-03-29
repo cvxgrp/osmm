@@ -44,7 +44,7 @@ For the solve method, the argument `W` specifies the problem to be solved, and `
 * `init_val` must be a scalar, a numpy array, or a numpy matrix that is in the same shape as `x`. It must be in the domain of `f`.
 
 ### Basic examples
-We take the following Kelly gambling problem as an example
+We take the following Kelly gambling problem as one example
 ```
 minimize - \sum_{i=1}^N log(w_i'x) / N
 subject to x >= 0, x'1 = 1,
@@ -96,11 +96,12 @@ print("x solution = ", x_var.value)
 minimize - \sum_{i=1}^N p_i' min(As, d_i) / N + t ||A||_1
 subject to A >= 0, \sum_{j=1}^m A_ij <= 1,
 ```
-where `A` is an `m` by `d` variable, `m` is the number of sale nodes, and `d` is the number of source nodes.
-The amounts of product on the source nodes `s`, the samples of prices on sale nodes `p_i`,
-the samples of demands on sale nodes `d_i`, and the regularization parameter `t` are given.
-The first term in the objective function, i.e., the negative revenue, is `f`,
-the second term plus the indicator function of the constraints is `g`,
+where `A` is an `m` by `d` variable, `m` is the number of retail nodes, and `d` is the number of warehouse nodes.
+The notation `|| ||_1` is the sum of absolute values of all entires.
+The amounts of product `s` on the warehouse nodes, the `N` samples of prices `p_i` and demands `d_i` on the retail nodes, 
+and the regularization parameter `t` are given.
+The first term in the objective function, i.e., the negative averaged revenue, is `f`,
+the regularization term plus the indicator function of the constraints is `g`,
 and the data matrix `W = [(d_1, p_1), ..., (d_N, p_N)]`. 
 
 ```python
@@ -115,21 +116,21 @@ N = 10000
 s = np.random.uniform(low=1.0, high=5.0, size=(d))
 W = np.exp(np.random.randn(2 * m, N))
 t = 1
+A_var = cp.Variable((m, d), nonneg=True)
 init_val = np.ones((m, d))
-A_var = cp.Variable((m, d))
 
 def my_g_cvxpy():
     g = t * cp.sum(cp.abs(A_var))
-    constrs = [A_var >= 0, cp.sum(A_var, axis=0) <= np.ones(m)]
-    return A_var, g, constrs
+    constr = [cp.sum(A_var, axis=0) <= np.ones(d)]
+    return A_var, g, constr
 
 def my_f_torch(w_torch, A_torch):
     d_torch = w_torch[0:m, :]
     p_torch = w_torch[m:2 * m, :]
-    source_torch = torch.tensor(source, dtype=torch.float, requires_grad=False)
-    q_torch = torch.matmul(A_torch, source_torch)
-    revenue = torch.sum(p_torch * torch.min(d_torch, q_torch[:, None])) / N
-    return -revenue
+    s_torch = torch.tensor(s, dtype=torch.float, requires_grad=False)
+    retail_node_amount = torch.matmul(A_torch, s_torch)
+    ave_revenue = torch.sum(p_torch * torch.min(d_torch, retail_node_amount[:, None])) / N
+    return -ave_revenue
     
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
 result = osmm_prob.solve(W, init_val)
