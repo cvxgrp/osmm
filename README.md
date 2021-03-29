@@ -178,7 +178,7 @@ More detailed results are stored in the dictonary `method_results`, which is an 
 We take the Kelly gambling problem as an example again. 
 The variable `x_var`, the functions `my_f_torch` and `my_g_cvxpy`, and `init_val` have been defined in the above.
 We compare the time cost of `osmm` with CVXPY on a CPU, and show that `osmm` is not as efficient as CVXPY when the data matrix is small with `N=100`,
-but is more efficient when the data matrix is large with `N=10,000`.
+but is more efficient when the data matrix is large with `N=30,000`.
 
 ```python
 import time as time
