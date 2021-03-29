@@ -43,15 +43,14 @@ For the solve method, the argument `W` specifies the problem to be solved, and `
 * `W` must be a scalar, a numpy array, or a numpy matrix.
 * `init_val` must be a scalar, a numpy array, or a numpy matrix that is in the same shape as `x`. It must be in the domain of `f`.
 
-### Basic example
+### Basic examples
 We take the following Kelly gambling problem as an example
 ```
 minimize - \sum_{i=1}^N log(w_i'x) / N
 subject to x >= 0, x'1 = 1,
 ```
 where `x` is an `n` dimensional variable, and `w_i` for `i=1,...,N` are given data.
-
-Here the objective function is `f`, the indicator function of the constraints is `g`, and the data matrix `W = [w_1, ..., w_N]`.
+The objective function is `f`, the indicator function of the constraints is `g`, and the data matrix `W = [w_1, ..., w_N]`.
 The code is as follows.
 ```python
 import torch
@@ -90,6 +89,50 @@ opt_obj_val = osmm_prob.solve(W, init_val)
 
 # A solution for x is stored in x_var.value.
 print("x solution = ", x_var.value)
+```
+
+`osmm` accepts matrix variables. Take the following bipartite graph newsvendor problem as an example
+```
+minimize - \sum_{i=1}^N p_i' min(As, d_i) / N + t ||A||_1
+subject to A >= 0, \sum_{j=1}^m A_ij <= 1,
+```
+where `A` is an `m` by `d` variable, `m` is the number of sale nodes, and `d` is the number of source nodes.
+The amounts of product on the source nodes `s`, the samples of prices on sale nodes `p_i`,
+the samples of demands on sale nodes `d_i`, and the regularization parameter `t` are given.
+The first term in the objective function, i.e., the negative revenue, is `f`,
+the second term plus the indicator function of the constraints is `g`,
+and the data matrix `W = [(d_1, p_1), ..., (d_N, p_N)]`. 
+
+```python
+import torch
+import autograd.numpy as np
+import cvxpy as cp
+from osmm import OSMM
+
+d = 10
+m = 20
+N = 10000
+s = np.random.uniform(low=1.0, high=5.0, size=(d))
+W = np.exp(np.random.randn(2 * m, N))
+t = 1
+init_val = np.ones((m, d))
+A_var = cp.Variable((m, d))
+
+def my_g_cvxpy():
+    g = t * cp.sum(cp.abs(A_var))
+    constrs = [A_var >= 0, cp.sum(A_var, axis=0) <= np.ones(m)]
+    return A_var, g, constrs
+
+def my_f_torch(w_torch, A_torch):
+    d_torch = w_torch[0:m, :]
+    p_torch = w_torch[m:2 * m, :]
+    source_torch = torch.tensor(source, dtype=torch.float, requires_grad=False)
+    q_torch = torch.matmul(A_torch, source_torch)
+    revenue = torch.sum(p_torch * torch.min(d_torch, q_torch[:, None])) / N
+    return -revenue
+    
+osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
+result = osmm_prob.solve(W, init_val)
 ```
 
 For more examples, see the [`examples`](examples/) directory.
