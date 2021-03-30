@@ -19,14 +19,14 @@ class OSMM:
         except Exception as e:
             self.g_objf = cp.Parameter(value=0)
 
-        self.g_additional_vars = []
+        self.g_additional_var_val = {}
         for var in self.g_objf.variables():
-            if var is not self.x_var_cvxpy and var not in self.g_additional_vars:
-                self.g_additional_vars.append(var)
+            if var is not self.x_var_cvxpy and var not in self.g_additional_var_val:
+                self.g_additional_var_val[var] = None
         for constr in self.g_constrs:
             for var in constr.variables():
-                if var is not self.x_var_cvxpy and var not in self.g_additional_vars:
-                    self.g_additional_vars.append(var)
+                if var is not self.x_var_cvxpy and var not in self.g_additional_var_val:
+                    self.g_additional_var_val[var] = None
 
         self.n = self.x_var_cvxpy.size
         if len(self.x_var_cvxpy.shape) <= 1:
@@ -113,7 +113,8 @@ class OSMM:
         if alg_mode == AlgMode.Exact or alg_mode == AlgMode.BFGSBundle:
             hessian_rank = self.n
 
-        self.W_torch = torch.tensor(W, dtype=torch.float, requires_grad=False)
+        if W is not None:
+            self.W_torch = torch.tensor(W, dtype=torch.float, requires_grad=False)
         if W_validate is not None:
             self.W_torch_validate = torch.tensor(W_validate, dtype=torch.float, requires_grad=False)
 
@@ -129,7 +130,6 @@ class OSMM:
             else:
                 self.method_results["var_iters"] = np.zeros((self.n0, self.n1, 1))
         self.method_results["soln"] = None
-        self.method_results["soln_additional_vars"] = [None] * len(self.g_additional_vars)
         self.method_results["objf_iters"] = np.zeros(max_iter)
         self.method_results["objf_validate_iters"] = np.zeros(max_iter)
         self.method_results["lower_bound_iters"] = -np.ones(max_iter) * np.inf
@@ -148,7 +148,7 @@ class OSMM:
         osmm_method = OsmmUpdate(self)
 
         subprob, x_k, objf_k, objf_validate_k, f_k, f_grad_k, g_k, lam_k, f_grads_iters_value, f_const_iters_value, \
-        G_k, diag_H_k, additional_vars_value \
+        G_k, diag_H_k \
             = osmm_method.initialization(init_val, hessian_rank, gradient_memory, alg_mode, tau_min, init_by_Hutchinson)
         lower_bound_k = -np.inf
         mu_k = mu_0
@@ -160,9 +160,6 @@ class OSMM:
         self.method_results["lambd_iters"][0] = lam_k
         if self.W_torch_validate is not None:
             self.method_results["objf_validate_iters"][0] = objf_validate_k
-        if objf_k < np.inf:
-            self.method_results["soln"] = x_k
-            self.method_results["soln_additional_vars"] = additional_vars_value
 
         update_func = partial(osmm_method.update_func, alg_mode=alg_mode, hessian_rank=hessian_rank,
                               gradient_memory=gradient_memory, solver=solver, num_iters_eval_Lk=num_iters_eval_Lk,
@@ -177,7 +174,7 @@ class OSMM:
 
             stopping_criteria_satisfied, x_k_plus_one, objf_k_plus_one, g_k_plus_one, lower_bound_k_plus_one, \
             f_grad_k_plus_one, f_grads_iters_value, f_const_iters_value, G_k_plus_one, diag_H_k_plus_one, \
-            lam_k_plus_one, mu_k_plus_one, additional_vars_value \
+            lam_k_plus_one, mu_k_plus_one \
                 = update_func(subprob, iter_idx, objf_k, g_k, lower_bound_k, f_grad_k,
                               f_grads_iters_value, f_const_iters_value, G_k, diag_H_k, lam_k, mu_k)
 
@@ -193,14 +190,10 @@ class OSMM:
             diag_H_k = diag_H_k_plus_one
             lam_k = lam_k_plus_one
             mu_k = mu_k_plus_one
-            if objf_k <= np.min(self.method_results["objf_iters"][0:iter_idx]):
-                self.method_results["soln"] = x_k_plus_one
-                self.method_results["soln_additional_vars"] = additional_vars_value
 
         self.x_var_cvxpy.value = self.method_results["soln"]
-        for i in range(len(self.g_additional_vars)):
-            var = self.g_additional_vars[i]
-            var.value = self.method_results["soln_additional_vars"][i]
+        for var in self.g_additional_var_val:
+            var.value = self.g_additional_var_val[var]
         print("      Time elapsed (secs): %f." % np.sum(self.method_results["runtime_iters"]))
         print("")
         return np.min(self.method_results["objf_iters"][0:self.method_results["iters_taken"] + 1])
