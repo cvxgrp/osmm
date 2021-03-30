@@ -44,7 +44,7 @@ For the solve method, the argument `W` specifies the problem to be solved, and `
 * `init_val` must be a scalar, a numpy array, or a numpy matrix that is in the same shape as `x`. It must be in the domain of `f`.
 
 ### Basic examples
-We take the following Kelly gambling problem as one example
+**Example 1.** We take the following Kelly gambling problem as one example
 ```
 minimize - \sum_{i=1}^N log(w_i'x) / N
 subject to x >= 0, x'1 = 1,
@@ -91,7 +91,7 @@ opt_obj_val = osmm_prob.solve(W, init_val)
 print("x solution = ", x_var.value)
 ```
 
-`osmm` accepts matrix variables. Take the following bipartite graph newsvendor problem as an example
+**Example 2.** `osmm` accepts matrix variables. Take the following bipartite graph newsvendor problem as an example
 ```
 minimize - \sum_{i=1}^N p_i' min(As, d_i) / N + t||A||_1
 subject to A >= 0, \sum_{j=1}^m A_ij <= 1,
@@ -138,41 +138,7 @@ result = osmm_prob.solve(W, init_val)
 
 For more examples, see the [`examples`](examples/) directory.
 
-### Optional arguments
-There are some optional arguments for the `solve` method.
-* `W_validate` is a scalar, a numpy array, or a numpy matrix in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy. The default value is `None`.
-* `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. The default value is `20`.
-*  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. The default value is `20`. Please see the paper for more details.
-* `max_iter` is the maximum number of iterations. The default value is `200`.
-* `solver` must be one of the solvers supported by CVXPY. The default value is `'ECOS'`.
-* `store_var_all_iters` is a boolean giving the choice of whether the updates of `x` in all iterations are stored. The default value is `True`.
-* The following tolerances are used in the stopping criteria.
-    * `eps_gap_abs` and `eps_gap_rel` are the absolute and the relative tolerances on the gap between upper and lower bounds on the optimum objective, respectively. The default value is `1e-4` for both of them.
-    * `eps_res_abs` and `eps_res_rel` are the absolute and the relative tolerances on a residue for an optimality condition, respectively. The default value is `1e-4` for both of them.
-
-### Return values
-The optimal objective is returned by the `solve` method.
-A solution for `x` and the other variables in `g` can be obtained in the `value` attribute of the corresponding CVXPY variables.
-
-More detailed results are stored in the dictonary `method_results`, which is an attribute of an `OSMM` object. The keys are as follows.
-* `"objf_iters"` stores the objective value versus iterations.
-* `"lower_bound_iters"` stores lower bound on the optimal objective value versus iterations.
-* `"iters_taken"` stores the actual number of iterations taken.
-* `"objf_validate_iters"` stores the validate objective value versus iterations, when `W_validate` is provided.
-* More detailed histories during the iterations are as follows.
-  * `"var_iters"` stores the update of `x` versus iterations. It can be turned off by setting the argument `store_var_all_iters=False`.
-  * `"runtime_iters"` stores the time cost per iteration versus iterations.
-  * `"opt_res_iters"` stores the norm of the optimality residue versus iterations.
-  * `"f_grad_norm_iters"` stores the norm of the gradient of `f` versus iterations.
-  * `"q_norm_iters"` stores the norm of `q` versus iterations.
-  * `"v_norm_iters"` stores the norm of `v` versus iterations.
-  * `"lambd_iters"` stores the value of the penalty parameter versus iterations.
-  * `"mu_iters"` stores the value of `mu` versus iterations.
-  * `"t_iters"` stores the value of `t` versus iterations.
-  * `"num_f_evas_line_search_iters"` stores the number of `f` evaluations in the line search versus iterations.
-  * `"time_cost_detail_iters"` stores the time costs of computing the value of `f` once, the gradient of `f` once, the tentative update, and the lower bound versus iterations.
-
-## Efficiency
+### Efficiency
 `osmm` is efficient when `W` contains a large data matrix, and can be more efficient if PyTorch uses a GPU to compute `f` and its gradient.
 
 We take the Kelly gambling problem as an example again. 
@@ -212,4 +178,39 @@ opt_obj_val = cvx_prob.solve()
 print("N = 30,000, cvxpy time cost = %.2f, opt value = %.5f" % (time.time() - t4, opt_obj_val))
 # N = 30,000, cvxpy time cost = 7.70, opt value = -0.00074
 ```
+
+### Optional arguments
+There are some optional arguments for the `solve` method.
+* `W_validate` is a scalar, a numpy array, or a numpy matrix in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy. The default value is `None`.
+* `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. The default value is `20`.
+*  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. The default value is `20`. Please see the paper for more details.
+* `max_iter` is the maximum number of iterations. The default value is `200`.
+* `solver` must be one of the solvers supported by CVXPY. The default value is `'ECOS'`.
+* `store_var_all_iters` is a boolean giving the choice of whether the updates of `x` in all iterations are stored. The default value is `True`.
+* The following tolerances are used in the stopping criteria.
+    * `eps_gap_abs` and `eps_gap_rel` are the absolute and the relative tolerances on the gap between upper and lower bounds on the optimum objective, respectively. The default value is `1e-4` for both of them.
+    * `eps_res_abs` and `eps_res_rel` are the absolute and the relative tolerances on a residue for an optimality condition, respectively. The default value is `1e-4` for both of them.
+
+### Return values
+The optimal objective is returned by the `solve` method.
+A solution for `x` and the other variables in `g` can be obtained in the `value` attribute of the corresponding CVXPY variables.
+
+More detailed results are stored in the dictonary `method_results`, which is an attribute of an `OSMM` object. The keys are as follows.
+* `"objf_iters"` stores the objective value versus iterations.
+* `"lower_bound_iters"` stores lower bound on the optimal objective value versus iterations.
+* `"iters_taken"` stores the actual number of iterations taken.
+* `"objf_validate_iters"` stores the validate objective value versus iterations, when `W_validate` is provided.
+* More detailed histories during the iterations are as follows.
+  * `"var_iters"` stores the update of `x` versus iterations. It can be turned off by setting the argument `store_var_all_iters=False`.
+  * `"runtime_iters"` stores the time cost per iteration versus iterations.
+  * `"opt_res_iters"` stores the norm of the optimality residue versus iterations.
+  * `"f_grad_norm_iters"` stores the norm of the gradient of `f` versus iterations.
+  * `"q_norm_iters"` stores the norm of `q` versus iterations.
+  * `"v_norm_iters"` stores the norm of `v` versus iterations.
+  * `"lambd_iters"` stores the value of the penalty parameter versus iterations.
+  * `"mu_iters"` stores the value of `mu` versus iterations.
+  * `"t_iters"` stores the value of `t` versus iterations.
+  * `"num_f_evas_line_search_iters"` stores the number of `f` evaluations in the line search versus iterations.
+  * `"time_cost_detail_iters"` stores the time costs of computing the value of `f` once, the gradient of `f` once, the tentative update, and the lower bound versus iterations.
+
 ## Citing
