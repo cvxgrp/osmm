@@ -68,17 +68,16 @@ def get_initial_val():
     ini[q] = 1.0
     return ini
 
-
-def get_cvxpy_description():
-    x_var = cp.Variable(q + 1) #[p, alpha]
-    u_var = cp.Variable(m)
+x_var = cp.Variable(q + 1) #[p, alpha]
+u_var = cp.Variable(m)
+def my_g_cvxpy():
     constr = [A @ u_var + x_var[0:q] == 0, cp.norm(u_var, 'inf') <= u_max,
               cp.norm(x_var[0:q], 'inf') <= p_max, x_var[q] >= 1e-8]
     g = 0
-    return x_var, g, constr, [u_var]
+    return x_var, g, constr
 
 
-def my_objf_torch(w_torch=None, x_torch=None, take_mean=True):
+def my_f_torch(w_torch=None, x_torch=None, take_mean=True):
     s_torch = w_torch[0:q, :]
     d_torch = w_torch[q:q * 2, :]
     if x_torch.shape == torch.Size([n]):

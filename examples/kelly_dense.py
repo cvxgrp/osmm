@@ -58,14 +58,14 @@ def get_initial_val():
     return ini
 
 
-def get_cvxpy_description():
+def my_g_cvxpy():
     b_var = cp.Variable(n, nonneg=True)
     g = 0
     constr = [cp.sum(b_var) == 1]
     return b_var, g, constr
 
 
-def my_objf_torch(r_torch=None, b_torch=None, take_mean=True):
+def my_f_torch(r_torch=None, b_torch=None, take_mean=True):
     if b_torch.shape == torch.Size([n]):
         tmp = torch.matmul(r_torch.T, b_torch)
     else:

@@ -23,7 +23,6 @@ n = n_product + 1
 N = 10000
 n_w = 2 * n_product
 B = np.random.uniform(low=0, high=0.02, size=(n_product, n_product))
-A = B.dot(B.T)
 cost_bound = 1.0
 eta = 0.5
 
@@ -65,14 +64,14 @@ def get_initial_val():
     return np.ones(n)
 
 
-def get_cvxpy_description():
+def my_g_cvxpy():
     q_var = cp.Variable(n)
     g = 0
     constr = [cp.square(cp.norm(B.T @ q_var[0:n_product])) <= cost_bound, q_var[0:n-1] >= 0, q_var[n-1] >= 1e-10]
     return q_var, g, constr
 
 
-def my_objf_torch(w_torch=None, q_torch=None, take_mean=True):
+def my_f_torch(w_torch=None, q_torch=None, take_mean=True):
     if take_mean == False:
         print("take_mean must be true")
         return None
@@ -195,6 +194,8 @@ def my_plot_one_result(W, x_best, is_save_fig=False, figname="newsvendor.pdf"):
     b = fig.add_subplot(gs[0, 1])
     D = W[0:n_w // 2, :]
     P = W[n_w // 2:n_w, :]
+    A = B.dot(B.T)
+
     cost = x_best[0:n_product].dot(A.dot(x_best[0:n_product]))
     profits = np.sum(P.T * (np.minimum(D.T, x_best[0:n_product])), axis=1) - cost
     weights = np.ones_like(profits) / len(profits)

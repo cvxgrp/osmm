@@ -19,7 +19,7 @@ np.random.seed(0)
 np.seterr(all='raise')
 
 eta = 0.9
-N = 1000000
+N = 10000
 n_stocks = 1249
 n_w = n_stocks * 2 + 1
 n = n_w + 1
@@ -57,14 +57,14 @@ def get_initial_val():
     return ini
 
 
-def get_cvxpy_description():
+def my_g_cvxpy():
     b_var = cp.Variable(n)
     g = 0
     constr = [cp.sum(b_var[1:n]) == 1, b_var[1:n] >= 0, b_var[0] >= 1e-8]
     return b_var, g, constr
 
 
-def my_objf_torch(r_torch=None, b_torch=None, take_mean=True):
+def my_f_torch(r_torch=None, b_torch=None, take_mean=True):
     if b_torch.shape == torch.Size([n]):
         tmp = torch.matmul(r_torch.T, b_torch[1:n])
     else:

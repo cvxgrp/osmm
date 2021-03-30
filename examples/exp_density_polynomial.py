@@ -22,7 +22,7 @@ np.random.seed(0)
 np.seterr(all='raise')
 
 
-N_0 = 100000
+N_0 = 10000
 lam_reg = 1e-4
 
 d = 2
@@ -119,14 +119,14 @@ def get_initial_val():
     return np.ones(n) / n
 
 
-def get_cvxpy_description():
+def my_g_cvxpy():
     theta_var = cp.Variable(n)
     g = lam_reg * cp.quad_form(theta_var, D_reg)
     constr = []
     return theta_var, g, constr
 
 
-def my_objf_torch(w_torch=None, theta_torch=None):
+def my_f_torch(w_torch=None, theta_torch=None):
     _, batch_size = w_torch.shape
     phi_z_torch = w_torch[0:n, :]
     log_pi_z_torch = w_torch[n_w - 1, :]
