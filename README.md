@@ -43,8 +43,8 @@ For the solve method, the argument `W` specifies the problem to be solved, and `
 * `W` must be a scalar, a numpy array, or a numpy matrix.
 * `init_val` must be a scalar, a numpy array, or a numpy matrix that is in the same shape as `x`. It must be in the domain of `f`.
 
-### Basic examples
-**Example 1.** We take the following Kelly gambling problem as one example
+### Examples
+**1. Basic example.** We take the following Kelly gambling problem as one example
 ```
 minimize - \sum_{i=1}^N log(w_i'x) / N
 subject to x >= 0, x'1 = 1,
@@ -91,7 +91,7 @@ opt_obj_val = osmm_prob.solve(W, init_val)
 print("x solution = ", x_var.value)
 ```
 
-**Example 2.** `osmm` accepts matrix variables. Take the following bipartite graph newsvendor problem as an example
+**2. Matrix variable.** `osmm` accepts matrix variables. Take the following bipartite graph newsvendor problem as an example
 ```
 minimize - \sum_{i=1}^N p_i' min(As, d_i) / N + t||A||_1
 subject to A >= 0, \sum_{j=1}^m A_ij <= 1,
@@ -134,6 +134,21 @@ def my_f_torch(w_torch, A_torch):
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
 result = osmm_prob.solve(W, init_val)
 ```
+
+**3. Additional variables in g.** `osmm` accepts variables additional to `x` in `g`. Take the following simplified power flow problem as an example
+```
+minimize \sum_{i=1}^N 1' (-d_i - s_i - p)_+ / N
+subject to Au + p = 0, ||u||_inf <= u_max, ||p||_inf <= p_max,
+```
+where `p` is an `n` dimensional variable denoting the power generated at the `n` nodes, 
+and `u` is an `m` dimensional variable denoting the power flow along the `m` edges.
+The graph incidence matrix `A`, the `N` samples of demands `d_i` and supplies `s_i`,
+and the capacities `u_max` and `p_max` are given.
+The objective function is `f`, and `p` corresponds to the variable `x`.
+Minimization of the indicator function of the constraints over `u` gives `g`,
+and `u` is an additional variable in `g`.
+The data matrix `W = [(d_1, s_1), ..., (d_N, s_N)]`. 
+
 
 For more examples, see the [`examples`](examples/) directory.
 
