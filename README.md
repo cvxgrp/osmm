@@ -91,15 +91,16 @@ opt_obj_val = osmm_prob.solve(W, init_val)
 print("x solution = ", x_var.value)
 ```
 
-**2. Matrix variable.** `osmm` accepts matrix variables. Take the following bipartite graph newsvendor problem as an example
+**2. Matrix variable.** `osmm` accepts matrix variables. Take the following allocation problem as an example
 ```
 minimize - \sum_{i=1}^N p_i' min(As, d_i) / N + t||A||_1
 subject to A >= 0, \sum_{j=1}^m A_ij <= 1,
 ```
-where `A` is an `m` by `d` variable, which represents allocation of product amounts from `d` warehouse nodes to `m` retail nodes.
-The amounts of product `s` on the warehouse nodes, the `N` samples of prices `p_i` and demands `d_i` on the retail nodes, 
-and the regularization parameter `t` are given. The notation `|| ||_1` is the sum of absolute values of all entires.
-The first term in the objective function, i.e., the negative averaged revenue, is `f`,
+where `A` is an `m` by `d` variable.
+The `d` dimensional vector `s`, the positive scalar `t`, 
+and the `m` dimensional vectors `p_i` and `d_i` are given. 
+The notation `|| ||_1` is the sum of absolute values of all entires.
+The first term in the objective function is `f`,
 the regularization term plus the indicator function of the constraints is `g`,
 and the data matrix `W = [(d_1, p_1), ..., (d_N, p_N)]`. 
 
@@ -137,18 +138,57 @@ result = osmm_prob.solve(W, init_val)
 
 **3. Additional variables in g.** `osmm` accepts variables additional to `x` in `g`. Take the following simplified power flow problem as an example
 ```
-minimize \sum_{i=1}^N 1' (-d_i - s_i - p)_+ / N
-subject to Au + p = 0, ||u||_inf <= u_max, ||p||_inf <= p_max,
+minimize \sum_{i=1}^N 1' (-d_i - s_i - x)_+ / N
+subject to Au + x = 0, ||u||_inf <= u_max, ||x||_inf <= x_max,
 ```
-where `p` is an `n` dimensional variable denoting the power generated at the `n` nodes, 
-and `u` is an `m` dimensional variable denoting the power flow along the `m` edges.
-The graph incidence matrix `A`, the `N` samples of demands `d_i` and supplies `s_i`,
-and the capacities `u_max` and `p_max` are given.
-The objective function is `f`, and `p` corresponds to the variable `x`.
+where `x` is an `n` dimensional variable, and `u` is an `m` dimensional variable.
+The graph incidence matrix `A`, the `n` dimensional vectors `d_i` and `s_i`,
+and the positive scalars `u_max` and `x_max` are given.
+The objective function corresponds to `f`.
 Minimization of the indicator function of the constraints over `u` gives `g`,
-and `u` is an additional variable in `g`.
-The data matrix `W = [(d_1, s_1), ..., (d_N, s_N)]`. 
+so `u` is an additional variable in `g`.
+The data matrix `W = [(s_1, d_1), ..., (s_N, d_N)]`. 
 
+```python
+np.random.seed(0)
+n = 30
+
+full_edges = []
+for i in range(n - 1):
+    full_edges += [[i, j] for j in range(i + 1, n)]
+
+m = len(full_edges) // 2
+connected_edges = np.random.choice(range(len(full_edges)), m, replace=False)
+A = np.zeros((n, m))
+for i in range(m):
+    edge_idx = connected_edges[i]
+    A[full_edges[edge_idx][0], i] = 1
+    A[full_edges[edge_idx][1], i] = -1
+
+x_max = 1
+u_max = 0.1
+N = 1000
+W = np.zeros((2 * n, N))
+W[0:n, :] = np.exp(np.random.multivariate_normal(np.ones(n), np.eye(n), size=N)).T
+W[n:2 * n, :] = -np.exp(np.random.multivariate_normal(np.zeros(n), np.eye(n), size=N)).T
+
+x_var = cp.Variable(n)
+init_val = np.ones(n)
+u_var = cp.Variable(m)
+
+def my_g_cvxpy():
+    constr = [A @ u_var + x_var == 0, cp.norm(u_var, 'inf') <= u_max, cp.norm(x_var, 'inf') <= p_max]
+    g = 0
+    return x_var, g, constr
+
+def my_f_torch(w_torch=None, x_torch=None):
+    s_torch = w_torch[0:n, :]
+    d_torch = w_torch[n:n * 2, :]
+    return torch.mean(torch.sum(torch.relu(-d_torch.T - s_torch.T - x_torch), axis=1))
+
+osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
+result = osmm_prob.solve(W, init_val)
+```
 
 For more examples, see the [`examples`](examples/) directory.
 
