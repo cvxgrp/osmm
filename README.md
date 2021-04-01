@@ -96,10 +96,9 @@ print("x solution = ", x_var.value)
 minimize - \sum_{i=1}^N p_i' min(As, d_i) / N + t||A||_1
 subject to A >= 0, \sum_{j=1}^m A_ij <= 1,
 ```
-where `A` is an `m` by `d` variable, `m` is the number of retail nodes, and `d` is the number of warehouse nodes.
-The notation `|| ||_1` is the sum of absolute values of all entires.
+where `A` is an `m` by `d` variable, which represents allocation of product amounts from `d` warehouse nodes to `m` retail nodes.
 The amounts of product `s` on the warehouse nodes, the `N` samples of prices `p_i` and demands `d_i` on the retail nodes, 
-and the regularization parameter `t` are given.
+and the regularization parameter `t` are given. The notation `|| ||_1` is the sum of absolute values of all entires.
 The first term in the objective function, i.e., the negative averaged revenue, is `f`,
 the regularization term plus the indicator function of the constraints is `g`,
 and the data matrix `W = [(d_1, p_1), ..., (d_N, p_N)]`. 
