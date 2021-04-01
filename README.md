@@ -150,9 +150,12 @@ so `u` is an additional variable in `g`.
 The data matrix `W = [(s_1, d_1), ..., (s_N, d_N)]`. 
 
 ```python
-np.random.seed(0)
-n = 30
+import torch
+import autograd.numpy as np
+import cvxpy as cp
+from osmm import OSMM
 
+n = 30
 full_edges = []
 for i in range(n - 1):
     full_edges += [[i, j] for j in range(i + 1, n)]
