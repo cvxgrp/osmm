@@ -97,7 +97,7 @@ class OSMM:
 
     def solve(self, W, init_val, W_validate=None, max_iter=200, hessian_rank=20, gradient_memory=20, solver="ECOS",
               alg_mode=AlgMode.LowRankQNBundle, store_var_all_iters=True,
-              init_by_Hutchinson=True, stop_early=True, num_iters_eval_Lk=10, tau_min=1e-3, mu_min=1e-4, mu_max=1e5,
+              init_by_Hutchinson=True, stop_early=True, check_gap_frequency=10, tau_min=1e-3, mu_min=1e-4, mu_max=1e5,
               mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8, alpha=0.05, beta=0.5, j_max=10, ep=1e-15,
               eps_gap_abs=1e-4, eps_gap_rel=1e-4, eps_res_abs=1e-4, eps_res_rel=1e-4):
 
@@ -162,7 +162,7 @@ class OSMM:
             self.method_results["objf_validate_iters"][0] = objf_validate_k
 
         update_func = partial(osmm_method.update_func, alg_mode=alg_mode, hessian_rank=hessian_rank,
-                              gradient_memory=gradient_memory, solver=solver, num_iters_eval_Lk=num_iters_eval_Lk,
+                              gradient_memory=gradient_memory, solver=solver, check_gap_frequency=check_gap_frequency,
                               mu_min=mu_min, tau_min=tau_min, mu_max=mu_max, gamma_inc=gamma_inc, gamma_dec=gamma_dec,
                               beta=beta, j_max=j_max, alpha=alpha, ep=ep, eps_gap_abs=eps_gap_abs,
                               eps_gap_rel=eps_gap_rel, eps_res_abs=eps_res_abs, eps_res_rel=eps_res_rel)
