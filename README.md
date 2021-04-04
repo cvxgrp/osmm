@@ -238,15 +238,16 @@ print("N = 30,000, cvxpy time cost = %.2f, opt value = %.5f" % (time.time() - t4
 
 ### Optional arguments
 There are some optional arguments for the `solve` method.
-* `W_validate` is a scalar, a numpy array, or a numpy matrix in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy. The default value is `None`.
-* `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. The default value is `20`.
-*  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. The default value is `20`. Please see the paper for more details.
-* `max_iter` is the maximum number of iterations. The default value is `200`.
-* `solver` must be one of the solvers supported by CVXPY. The default value is `'ECOS'`.
-* `store_var_all_iters` is a boolean giving the choice of whether the updates of `x` in all iterations are stored. The default value is `True`.
+* `W_validate` is a scalar, a numpy array, or a numpy matrix in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy. Default value is `None`.
+* `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. Default value is `20`.
+*  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. Default value is `20`. Please see the paper for more details.
+* `max_iter` is the maximum number of iterations. Default value is `200`.
+* `check_gap_frequency` is the number of iterations between when we check the gap. Default value is 10.
+* `solver` must be one of the solvers supported by CVXPY. Default value is `'ECOS'`.
+* `store_var_all_iters` is a boolean giving the choice of whether the updates of `x` in all iterations are stored. Default value is `True`.
 * The following tolerances are used in the stopping criteria.
-    * `eps_gap_abs` and `eps_gap_rel` are the absolute and the relative tolerances on the gap between upper and lower bounds on the optimum objective, respectively. The default value is `1e-4` for both of them.
-    * `eps_res_abs` and `eps_res_rel` are the absolute and the relative tolerances on a residue for an optimality condition, respectively. The default value is `1e-4` for both of them.
+    * `eps_gap_abs` and `eps_gap_rel` are the absolute and the relative tolerances on the gap between upper and lower bounds on the optimum objective, respectively. Default value is `1e-4` for both of them.
+    * `eps_res_abs` and `eps_res_rel` are the absolute and the relative tolerances on a residue for an optimality condition, respectively. Default value is `1e-4` for both of them.
 
 ### Return values
 The optimal objective is returned by the `solve` method.
