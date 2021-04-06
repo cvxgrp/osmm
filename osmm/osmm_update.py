@@ -18,16 +18,11 @@ class OsmmUpdate:
         f_grad_0 = self.osmm_problem.f_grad_value(x_0)
         if self.osmm_problem.W_torch_validate is not None:
             f_validate_0 = self.osmm_problem.f_validate_value(x_0)
-            print("Validate sampling acc: |f(x0, W) - f(x0, W_validate)| = ", np.abs(f_0 - f_validate_0),
-                  " |f(x0, W)| = ", np.abs(f_0))
         else:
             f_validate_0 = None
 
         subprob = Subproblem(self.osmm_problem.x_var_cvxpy, self.osmm_problem.g_constrs,
                              self.osmm_problem.g_objf, hessian_rank=hessian_rank, gradient_memory=gradient_memory)
-
-        # check_g_fea_prob = cp.Problem(cp.Minimize(self.osmm_problem.g_objf),
-        #                               self.osmm_problem.g_constrs + [self.osmm_problem.x_var_cvxpy == x_0])
         subprob.x_for_g_para.value = x_0
         try:
             subprob.g_eval_subp.solve()
@@ -50,10 +45,8 @@ class OsmmUpdate:
             objf_validate_0 = None
 
         if init_by_Hutchison:
-            begin_Hutchinson_time = time.time()
             est_hess_tr = self.osmm_problem.f_hess_tr_Hutchinson(x_0, max_iter=100)
             lam_0 = max(tau_min, est_hess_tr / self.osmm_problem.n)
-            print("lam_0 = ", lam_0, ", Hutchinson time cost = ", time.time() - begin_Hutchinson_time)
         else:
             lam_0 = tau_min
 
@@ -102,7 +95,7 @@ class OsmmUpdate:
             else:
                 if objf_k_plus_one - L_k_plus_one <= eps_gap_abs + eps_gap_rel * np.abs(objf_k_plus_one):
                     return True
-        if t_k == 1 and opt_res_norm_k_plus_one <= self.osmm_problem.n * eps_res_abs \
+        if t_k == 1 and opt_res_norm_k_plus_one <= np.sqrt(self.osmm_problem.n) * eps_res_abs \
                 + eps_res_rel * (q_norm_k_plus_one + f_grad_norm_k_plus_one):
             return True
         return False
@@ -191,7 +184,7 @@ class OsmmUpdate:
         return lam_k_plus_one, mu_k_plus_one
 
     def update_func(self, subprob, iter_idx, objf_k, g_k, lower_bound_k, f_grad_k,
-                    f_grads_iters_value, f_const_iters_value, G_k, diag_H_k, lam_k, mu_k,
+                    f_grads_iters_value, f_const_iters_value, G_k, diag_H_k, lam_k, mu_k, verbose=False,
                     alg_mode=None, hessian_rank=None, gradient_memory=None, solver=None,
                     gamma_inc=None, gamma_dec=None, mu_min=None, tau_min=None, mu_max=None, ep=None,
                     beta=None, j_max=None, alpha=None, check_gap_frequency=None,
@@ -201,9 +194,16 @@ class OsmmUpdate:
                                     self.osmm_problem.g_constrs + subprob.bundle_constr)
             lower_bound_subp = cp.Problem(cp.Minimize(subprob.l_k + self.osmm_problem.g_objf),
                                           self.osmm_problem.g_constrs + subprob.bundle_constr)
+            g_eval_subp = cp.Problem(cp.Minimize(self.osmm_problem.g_objf), self.osmm_problem.g_constrs +
+                                     [self.osmm_problem.x_var_cvxpy == subprob.x_for_g_para])
         else:
+            # cvxpy_subp = cp.Problem(cp.Minimize(subprob.f_hat_k + self.osmm_problem.g_objf + subprob.trust_penalty),
+            #                         self.osmm_problem.g_constrs + subprob.bundle_constr)
+            # lower_bound_subp = cp.Problem(cp.Minimize(subprob.l_k + self.osmm_problem.g_objf),
+            #                               self.osmm_problem.g_constrs + subprob.bundle_constr)
             cvxpy_subp = subprob.cvxpy_subp
             lower_bound_subp = subprob.lower_bound_subp
+            g_eval_subp = subprob.g_eval_subp
 
         if self.osmm_problem.store_var_all_iters:
             if self.osmm_problem.n1 == 0:
@@ -218,9 +218,12 @@ class OsmmUpdate:
         subprob.x_prev_para.value = xk
         subprob.f_grads_iters_para.value = f_grads_iters_value
         subprob.f_const_iters_para.value = f_const_iters_value
-        subprob.lam_para.value = lam_k
+        subprob.sqrt_lam_para.value = np.sqrt(lam_k)
+        subprob.x_prev_times_sqrt_lam_para.value = xk * np.sqrt(lam_k)
+        # subprob.lam_para.value = lam_k
         subprob.G_para.value = G_k
         subprob.diag_H_para.value = diag_H_k
+        subprob.G_T_x_prev_para.value = G_k.T.dot(xk.flatten(order='F'))
 
         begin_solve_time = time.time()
         subp_solver_success = True
@@ -228,15 +231,15 @@ class OsmmUpdate:
             cvxpy_subp.solve(solver=solver, verbose=False)
         except Exception as e:
             subp_solver_success = False
-            print("iter.", iter_idx, ", subp. solver status: ", cvxpy_subp.status,
-                  ", update is None", self.osmm_problem.x_var_cvxpy.value is None, ", error message: ", e)
+            if verbose:
+                print("tentative update problem error:", e)
         if self.osmm_problem.x_var_cvxpy.value is None:
             self.osmm_problem.x_var_cvxpy.value = xk
         end_solve_time = time.time()
 
         x_k_plus_half = self.osmm_problem.x_var_cvxpy.value
         v_k = x_k_plus_half - xk
-        g_k_plus_half = self.osmm_problem.g_objf.value  ############## can be None
+        g_k_plus_half = self.osmm_problem.g_objf.value
         bundle_dual = subprob.bundle_constr[0].dual_value
 
         if self.osmm_problem.n1 == 0:
@@ -261,7 +264,7 @@ class OsmmUpdate:
             subprob.x_for_g_para.value = x_k_plus_one
             tmp_var_val = [var.value for var in subprob.g_eval_subp.variables()]
             try:
-                subprob.g_eval_subp.solve()
+                g_eval_subp.solve()
                 if self.osmm_problem.g_objf is not None and self.osmm_problem.g_objf.value < np.inf:
                     g_k_plus_one = self.osmm_problem.g_objf.value
                 else:
@@ -325,21 +328,33 @@ class OsmmUpdate:
         lam_k_plus_one, mu_k_plus_one = self._update_trust_params(mu_k, tk, tau_k_plus_one,
                                                                   tau_min, mu_min, mu_max, gamma_inc, gamma_dec)
 
-        begin_evaluate_L_k = 0
-        end_evaluate_L_k = 0
+        begin_eval_L_k = 0
+        end_eval_L_k = 0
         lower_bound_k_plus_one = lower_bound_k
         if iter_idx % check_gap_frequency == 0:
-            begin_evaluate_L_k = time.time()
+            print("start update L_k")
+            begin_eval_L_k = time.time()
             try:
                 lower_bound_subp.solve(solver=solver)
                 lower_bound_k_plus_one = max(lower_bound_k, lower_bound_subp.value)
             except Exception as e:
-                print("lower bound problem error:", e)
+                if verbose:
+                    print("lower bound problem error:", e)
                 lower_bound_k_plus_one = lower_bound_k
-            end_evaluate_L_k = time.time()
-            print("iter=", iter_idx, "objf_k+1=", objf_k_plus_one, "L_k+1=", lower_bound_k_plus_one,
-                  "lam_k+1=", lam_k_plus_one, "tk=", tk, "mu_k+1", mu_k_plus_one,
-                  "||G_k+1||_F=", np.linalg.norm(G_k_plus_one, 'fro'), "tau_k+1", tau_k_plus_one)
+            end_eval_L_k = time.time()
+            print("end update L_k, time cost =", end_eval_L_k - begin_eval_L_k)
+            if verbose:
+                if self.osmm_problem.W_torch_validate is not None:
+                    print_str = "iter = {}, objf = {:.3e}, lower bound = {:.3e}, RMS residual = {:.3e}, sampling acc = {:.3e}, ||G||_F = {:.3e}"
+                    print(print_str.format(iter_idx, objf_k_plus_one, lower_bound_k_plus_one,
+                                           opt_residual / np.sqrt(self.osmm_problem.n),
+                                           np.abs(objf_validation_k_plus_one - objf_k_plus_one),
+                                           np.linalg.norm(G_k_plus_one, 'fro')))
+                else:
+                    print_str = "iter = {}, objf = {:.3e}, lower bound = {:.3e}, RMS residual = {:.3e}, ||G||_F = {:.3e}"
+                    print(print_str.format(iter_idx, objf_k_plus_one, lower_bound_k_plus_one,
+                                           opt_residual / np.sqrt(self.osmm_problem.n),
+                                           np.linalg.norm(G_k_plus_one, 'fro')))
 
         stopping_criteria_satisfied = self._stopping_criteria(objf_k_plus_one, objf_validation_k_plus_one,
                                                               lower_bound_k_plus_one, tk, opt_residual,
@@ -351,7 +366,7 @@ class OsmmUpdate:
         self.osmm_problem.method_results["time_cost_detail_iters"][1, iter_idx] = end_evaluate_f_grad_time \
                                                                                   - begin_evaluate_f_grad_time
         self.osmm_problem.method_results["time_cost_detail_iters"][2, iter_idx] = end_solve_time - begin_solve_time
-        self.osmm_problem.method_results["time_cost_detail_iters"][3, iter_idx] = end_evaluate_L_k - begin_evaluate_L_k
+        self.osmm_problem.method_results["time_cost_detail_iters"][3, iter_idx] = end_eval_L_k - begin_eval_L_k
         if self.osmm_problem.store_var_all_iters:
             if self.osmm_problem.n1 == 0:
                 self.osmm_problem.method_results["var_iters"][:, iter_idx] = x_k_plus_one
@@ -359,12 +374,8 @@ class OsmmUpdate:
                 self.osmm_problem.method_results["var_iters"][:, :, iter_idx] = x_k_plus_one
         else:
             if self.osmm_problem.n1 == 0:
-                # self.osmm_problem.method_results["var_iters"][:, 0:gradient_memory - 1] = \
-                #     self.osmm_problem.method_results["var_iters"][:, 1:gradient_memory]
                 self.osmm_problem.method_results["var_iters"][:, 0] = x_k_plus_one
             else:
-                # self.osmm_problem.method_results["var_iters"][:, :, 0:gradient_memory - 1] = \
-                #     self.osmm_problem.method_results["var_iters"][:, :, 1:gradient_memory]
                 self.osmm_problem.method_results["var_iters"][:, :, 0] = x_k_plus_one
         self.osmm_problem.method_results["v_norm_iters"][iter_idx] = np.linalg.norm(v_k_vec)
         self.osmm_problem.method_results["objf_iters"][iter_idx] = objf_k_plus_one

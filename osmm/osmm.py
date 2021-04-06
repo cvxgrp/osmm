@@ -92,12 +92,12 @@ class OSMM:
             est_tr = new_est_tr
             it += 1
             # print(it, "Hv", np.linalg.norm(Hv), "VTHV", vTHv, "est", est_tr)
-        print("Hutchinson #iters", it, "rel. incr.", np.abs(new_est_tr - est_tr) / np.abs(est_tr), "est. tr.", est_tr)
+        # print("Hutchinson #iters", it, "rel. incr.", np.abs(new_est_tr - est_tr) / np.abs(est_tr), "est. tr.", est_tr)
         return est_tr
 
     def solve(self, W, init_val, W_validate=None, max_iter=200, hessian_rank=20, gradient_memory=20, solver="ECOS",
-              alg_mode=AlgMode.LowRankQNBundle, store_var_all_iters=True,
-              init_by_Hutchinson=True, stop_early=True, check_gap_frequency=10, tau_min=1e-3, mu_min=1e-4, mu_max=1e5,
+              alg_mode=AlgMode.LowRankQNBundle, store_var_all_iters=True, check_gap_frequency=10, verbose=False,
+              init_by_Hutchinson=True, stop_early=True, tau_min=1e-3, mu_min=1e-4, mu_max=1e5,
               mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8, alpha=0.05, beta=0.5, j_max=10, ep=1e-15,
               eps_gap_abs=1e-4, eps_gap_rel=1e-4, eps_res_abs=1e-4, eps_res_rel=1e-4):
 
@@ -161,7 +161,7 @@ class OSMM:
         if self.W_torch_validate is not None:
             self.method_results["objf_validate_iters"][0] = objf_validate_k
 
-        update_func = partial(osmm_method.update_func, alg_mode=alg_mode, hessian_rank=hessian_rank,
+        update_func = partial(osmm_method.update_func, verbose=verbose, alg_mode=alg_mode, hessian_rank=hessian_rank,
                               gradient_memory=gradient_memory, solver=solver, check_gap_frequency=check_gap_frequency,
                               mu_min=mu_min, tau_min=tau_min, mu_max=mu_max, gamma_inc=gamma_inc, gamma_dec=gamma_dec,
                               beta=beta, j_max=j_max, alpha=alpha, ep=ep, eps_gap_abs=eps_gap_abs,
@@ -194,6 +194,17 @@ class OSMM:
         self.x_var_cvxpy.value = self.method_results["soln"]
         for var in self.g_additional_var_val:
             var.value = self.g_additional_var_val[var]
-        print("      Time elapsed (secs): %f." % np.sum(self.method_results["runtime_iters"]))
-        print("")
+        if verbose:
+            iters_taken = self.method_results["iters_taken"]
+            if self.W_torch_validate is not None:
+                print("      Terminated. Num iterations = {}, objf = {:.3e}, lower bound = {:.3e}, RMS residual = {:.3e}, sampling acc = {:.3e}."
+                      .format(iters_taken, objf_k, lower_bound_k,
+                              self.method_results["opt_res_iters"][iters_taken] / np.sqrt(self.n),
+                              np.abs(self.method_results["objf_validate_iters"][iters_taken] - objf_k)))
+            else:
+                print("      Terminated. Num iterations = {}, objf = {:.3e}, lower bound = {:.3e}, RMS residual = {:.3e}."\
+                      .format(iters_taken, objf_k, lower_bound_k,
+                              self.method_results["opt_res_iters"][iters_taken] / np.sqrt(self.n)))
+            print("      Time elapsed (secs): %f." % np.sum(self.method_results["runtime_iters"]))
+            print("")
         return np.min(self.method_results["objf_iters"][0:self.method_results["iters_taken"] + 1])
