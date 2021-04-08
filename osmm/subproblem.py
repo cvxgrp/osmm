@@ -7,7 +7,7 @@ class Subproblem:
         # self.lam_para = cp.Parameter(nonneg=True)
         self.sqrt_lam_para = cp.Parameter(nonneg=True)
         self.l_k = cp.Variable(1)
-        self.diag_H_para = cp.Parameter(n, nonneg=True)
+        # self.diag_H_para = cp.Parameter(n, nonneg=True)
         self.G_para = cp.Parameter((n, hessian_rank))
         self.f_grads_iters_para = cp.Parameter((n, gradient_memory))
         self.f_const_iters_para = cp.Parameter(gradient_memory)

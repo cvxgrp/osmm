@@ -53,60 +53,60 @@ class CurvatureUpdate:
                 G_k_plus_one[:, hessian_rank - 1] = np.zeros(self.osmm_problem.n)
         return G_k_plus_one
 
-    def low_rank_diag_update(self, x, H_rank):
-        if self.osmm_problem.n > 10000:
-            print("Fast eigen-decomposition for n >= 10000 not supported.")
-        H = self.osmm_problem.f_hess(x)
-        u_vec, s_arr, _ = np.linalg.svd(H)
-        G_k_plus_one = u_vec[:, 0:H_rank].dot(np.diag(np.sqrt(s_arr[0:H_rank])))
-        diag_H = np.maximum(0, np.diag(H - G_k_plus_one.dot(G_k_plus_one.T)))
-        return G_k_plus_one, diag_H
-
-    def low_rank_new_samp_update(self, x, H_rank):
-        if H_rank == self.osmm_problem.n:
-            print("ERROR: Rank must be less than n for New Samp.")
-        if self.osmm_problem.n > 10000:
-            print("Fast eigen-decomposition for n >= 10000 not supported.")
-        H = self.osmm_problem.f_hess(x)
-        u_vec, s_arr, _ = np.linalg.svd(H)
-        sigma_NewSamp = np.sqrt(s_arr[0:H_rank] - s_arr[H_rank])
-        G_k_plus_one = u_vec[:, 0:H_rank].dot(np.diag(sigma_NewSamp))
-        diag_H = np.ones(self.osmm_problem.n) * s_arr[H_rank]
-        return G_k_plus_one, diag_H
-
-    def BFGS_update(self, G_k, xcur, xprev, grad_cur, grad_prev, tol=1e-10):  # full-rank
-        s = xcur - xprev
-        y = grad_cur - grad_prev
-        yTs = y.T.dot(s)
-        H_k = G_k.dot(G_k.T)
-        if yTs > tol:
-            Hs = H_k.dot(s)
-            H_k_plus_ones = H_k + np.outer(y, y) / yTs - np.outer(Hs, Hs) / s.T.dot(Hs)
-            u_vec, s_arr, _ = np.linalg.svd(H_k_plus_ones)
-            s_arr = np.sqrt(np.maximum(0, s_arr))
-            G_k_plus_one = u_vec.dot(np.diag(s_arr))
-        else:
-            G_k_plus_one = G_k
-        return G_k_plus_one
-
-    def exact_hess_update(self, x):  # full-rank
-        H = self.osmm_problem.f_hess(x)
-        u_vec, s_arr, _ = np.linalg.svd(H)
-        s_arr = np.sqrt(s_arr)
-        G_k_plus_one = u_vec.dot(np.diag(s_arr))
-        return G_k_plus_one
-
-    def trace_hess_update(self, x):
-        H = self.osmm_problem.f_hess(x)
-        diag_H = np.trace(H) / self.osmm_problem.n * np.ones(self.osmm_problem.n)
-        return diag_H
-
-    def diag_hess_update(self, x):
-        H = self.osmm_problem.f_hess(x)
-        diag_H = np.diag(H)
-        return diag_H
-
-    def Hutchison_update(self, x):
-        est_tr = self.osmm_problem.f_hess_tr_Hutchinson(x)
-        diag_H = est_tr / self.osmm_problem.n * np.ones(self.osmm_problem.n)
-        return diag_H
+    # def low_rank_diag_update(self, x, H_rank):
+    #     if self.osmm_problem.n > 10000:
+    #         print("Fast eigen-decomposition for n >= 10000 not supported.")
+    #     H = self.osmm_problem.f_hess(x)
+    #     u_vec, s_arr, _ = np.linalg.svd(H)
+    #     G_k_plus_one = u_vec[:, 0:H_rank].dot(np.diag(np.sqrt(s_arr[0:H_rank])))
+    #     diag_H = np.maximum(0, np.diag(H - G_k_plus_one.dot(G_k_plus_one.T)))
+    #     return G_k_plus_one, diag_H
+    #
+    # def low_rank_new_samp_update(self, x, H_rank):
+    #     if H_rank == self.osmm_problem.n:
+    #         print("ERROR: Rank must be less than n for New Samp.")
+    #     if self.osmm_problem.n > 10000:
+    #         print("Fast eigen-decomposition for n >= 10000 not supported.")
+    #     H = self.osmm_problem.f_hess(x)
+    #     u_vec, s_arr, _ = np.linalg.svd(H)
+    #     sigma_NewSamp = np.sqrt(s_arr[0:H_rank] - s_arr[H_rank])
+    #     G_k_plus_one = u_vec[:, 0:H_rank].dot(np.diag(sigma_NewSamp))
+    #     diag_H = np.ones(self.osmm_problem.n) * s_arr[H_rank]
+    #     return G_k_plus_one, diag_H
+    #
+    # def BFGS_update(self, G_k, xcur, xprev, grad_cur, grad_prev, tol=1e-10):  # full-rank
+    #     s = xcur - xprev
+    #     y = grad_cur - grad_prev
+    #     yTs = y.T.dot(s)
+    #     H_k = G_k.dot(G_k.T)
+    #     if yTs > tol:
+    #         Hs = H_k.dot(s)
+    #         H_k_plus_ones = H_k + np.outer(y, y) / yTs - np.outer(Hs, Hs) / s.T.dot(Hs)
+    #         u_vec, s_arr, _ = np.linalg.svd(H_k_plus_ones)
+    #         s_arr = np.sqrt(np.maximum(0, s_arr))
+    #         G_k_plus_one = u_vec.dot(np.diag(s_arr))
+    #     else:
+    #         G_k_plus_one = G_k
+    #     return G_k_plus_one
+    #
+    # def exact_hess_update(self, x):  # full-rank
+    #     H = self.osmm_problem.f_hess(x)
+    #     u_vec, s_arr, _ = np.linalg.svd(H)
+    #     s_arr = np.sqrt(s_arr)
+    #     G_k_plus_one = u_vec.dot(np.diag(s_arr))
+    #     return G_k_plus_one
+    #
+    # def trace_hess_update(self, x):
+    #     H = self.osmm_problem.f_hess(x)
+    #     diag_H = np.trace(H) / self.osmm_problem.n * np.ones(self.osmm_problem.n)
+    #     return diag_H
+    #
+    # def diag_hess_update(self, x):
+    #     H = self.osmm_problem.f_hess(x)
+    #     diag_H = np.diag(H)
+    #     return diag_H
+    #
+    # def Hutchison_update(self, x):
+    #     est_tr = self.osmm_problem.f_hess_tr_Hutchinson(x)
+    #     diag_H = est_tr / self.osmm_problem.n * np.ones(self.osmm_problem.n)
+    #     return diag_H
