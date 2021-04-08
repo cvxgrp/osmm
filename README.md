@@ -180,7 +180,7 @@ init_val = np.ones(n)
 u_var = cp.Variable(m)
 
 def my_g_cvxpy():
-    constr = [A @ u_var + x_var == 0, cp.norm(u_var, 'inf') <= u_max, cp.norm(x_var, 'inf') <= p_max]
+    constr = [A @ u_var + x_var == 0, cp.norm(u_var, 'inf') <= u_max, cp.norm(x_var, 'inf') <= x_max]
     g = 0
     return x_var, g, constr
 
@@ -213,13 +213,13 @@ W_small = np.random.uniform(low=0.5, high=1.5, size=(n, N))
 t1 = time.time()
 opt_obj_val = osmm_prob.solve(W_small, init_val)
 print("N = 100, osmm time cost = %.2f, opt value = %.4f" % (time.time() - t1, opt_obj_val))
-# N = 100, osmm time cost = 0.39, opt value = -0.0557
+# N = 100, osmm time cost = 0.33, opt value = -0.0557
 
 cvx_prob = cp.Problem(cp.Minimize(-cp.sum(cp.log(W_small.T @ x_var)) / N), [cp.sum(x_var) == 1])
 t2 = time.time()
-opt_obj_val = cvx_prob.solve()
+opt_obj_val = cvx_prob.solve(solver="ECOS")
 print("N = 100, cvxpy time cost = %.2f, opt value = %.4f" % (time.time() - t2, opt_obj_val))
-# N = 100, cvxpy time cost = 0.12, opt value = -0.0557
+# N = 100, cvxpy time cost = 0.09, opt value = -0.0557
 
 N = 30000
 W_large = np.random.uniform(low=0.5, high=1.5, size=(n, N))
@@ -227,22 +227,22 @@ W_large = np.random.uniform(low=0.5, high=1.5, size=(n, N))
 t3 = time.time()
 opt_obj_val = osmm_prob.solve(W_large, init_val)
 print("N = 30,000, osmm time cost = %.2f, opt value = %.5f" % (time.time() - t3, opt_obj_val))
-# N = 30,000, osmm time cost = 1.52, opt value = -0.00074
+# N = 30,000, osmm time cost = 1.43, opt value = -0.00074
 
 cvx_prob = cp.Problem(cp.Minimize(-cp.sum(cp.log(W_large.T @ x_var)) / N), [cp.sum(x_var) == 1])
 t4 = time.time()
-opt_obj_val = cvx_prob.solve()
+opt_obj_val = cvx_prob.solve(solver="ECOS")
 print("N = 30,000, cvxpy time cost = %.2f, opt value = %.5f" % (time.time() - t4, opt_obj_val))
-# N = 30,000, cvxpy time cost = 7.70, opt value = -0.00074
+# N = 30,000, cvxpy time cost = 39.11, opt value = -0.00074
 ```
 
 ### Optional arguments
 There are some optional arguments for the `solve` method.
-* `W_validate` is a scalar, a numpy array, or a numpy matrix in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy. Default value is `None`.
-* `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. Default value is `20`.
-*  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. Default value is `20`. Please see the paper for more details.
-* `max_iter` is the maximum number of iterations. Default value is `200`.
-* `check_gap_frequency` is the number of iterations between when we check the gap. Default value is 10.
+* `W_validate` is a scalar, a numpy array, or a numpy matrix in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy. Default is `None`.
+* `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. Default is `20`.
+*  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. Default is `20`.
+* `max_iter` is the maximum number of iterations. Default is `200`.
+* `check_gap_frequency` is the number of iterations between when we check the gap. Default is 10.
 * `solver` must be one of the solvers supported by CVXPY. Default value is `'ECOS'`.
 * `store_var_all_iters` is a boolean giving the choice of whether the updates of `x` in all iterations are stored. Default value is `True`.
 * The following tolerances are used in the stopping criteria.
@@ -256,19 +256,19 @@ A solution for `x` and the other variables in `g` can be obtained in the `value`
 More detailed results are stored in the dictonary `method_results`, which is an attribute of an `OSMM` object. The keys are as follows.
 * `"objf_iters"` stores the objective value versus iterations.
 * `"lower_bound_iters"` stores lower bound on the optimal objective value versus iterations.
-* `"iters_taken"` stores the actual number of iterations taken.
+* `"total_iters"` stores the actual number of iterations taken.
 * `"objf_validate_iters"` stores the validate objective value versus iterations, when `W_validate` is provided.
 * More detailed histories during the iterations are as follows.
   * `"var_iters"` stores the update of `x` versus iterations. It can be turned off by setting the argument `store_var_all_iters=False`.
-  * `"runtime_iters"` stores the time cost per iteration versus iterations.
-  * `"opt_res_iters"` stores the norm of the optimality residue versus iterations.
+  * `"time_iters"` stores the time cost per iteration versus iterations.
+  * `"rms_res_iters"` stores the RMS value of optimality residue versus iterations.
   * `"f_grad_norm_iters"` stores the norm of the gradient of `f` versus iterations.
   * `"q_norm_iters"` stores the norm of `q` versus iterations.
   * `"v_norm_iters"` stores the norm of `v` versus iterations.
-  * `"lambd_iters"` stores the value of the penalty parameter versus iterations.
+  * `"lam_iters"` stores the value of the penalty parameter versus iterations.
   * `"mu_iters"` stores the value of `mu` versus iterations.
   * `"t_iters"` stores the value of `t` versus iterations.
-  * `"num_f_evas_line_search_iters"` stores the number of `f` evaluations in the line search versus iterations.
-  * `"time_cost_detail_iters"` stores the time costs of computing the value of `f` once, the gradient of `f` once, the tentative update, and the lower bound versus iterations.
+  * `"num_f_evals_iters"` stores the number of `f` evaluations per iteration versus iterations.
+  * `"time_detail_iters"` stores the time costs of computing the value of `f` once, the gradient of `f` once, the tentative update, and the lower bound versus iterations.
 
 ## Citing
