@@ -96,26 +96,27 @@ class OSMM:
         return est_tr
 
     def solve(self, W, init_val, W_validate=None, max_iter=200, hessian_rank=20, gradient_memory=20, solver="ECOS",
-              alg_mode=AlgMode.LowRankQNBundle, store_var_all_iters=True, check_gap_frequency=10, verbose=False,
-              init_by_Hutchinson=True, stop_early=True, tau_min=1e-3, mu_min=1e-4, mu_max=1e5,
-              mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8, alpha=0.05, beta=0.5, j_max=10, ep=1e-15,
-              eps_gap_abs=1e-4, eps_gap_rel=1e-4, eps_res_abs=1e-4, eps_res_rel=1e-4):
+              eps_gap_abs=1e-4, eps_gap_rel=1e-4, eps_res_abs=1e-4, eps_res_rel=1e-4,
+              check_gap_frequency=10, store_var_all_iters=True, verbose=False, use_termination_criteria=True,
+              init_by_Hutchinson=True, tau_min=1e-3, mu_min=1e-4, mu_max=1e5, mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8,
+              alpha=0.05, beta=0.5, j_max=10, ep=1e-15):
 
-        if alg_mode != AlgMode.Bundle and alg_mode != AlgMode.LowRankQNBundle and self.n1 != 0:
-            alg_mode = AlgMode.LowRankQNBundle
-            hessian_rank = 20
-            gradient_memory = 20
+        assert hessian_rank >= 0
+        assert gradient_memory >= 1
+
         if hessian_rank == 0:
             alg_mode = AlgMode.Bundle
             hessian_rank = 1
-        if gradient_memory <= 0:
-            gradient_memory = 1
-        if alg_mode == AlgMode.Exact or alg_mode == AlgMode.BFGSBundle:
-            hessian_rank = self.n
+        else:
+            alg_mode = AlgMode.LowRankQNBundle
 
         if W is not None:
+            if self.W_torch is not None:
+                del self.W_torch
             self.W_torch = torch.tensor(W, dtype=torch.float, requires_grad=False)
         if W_validate is not None:
+            if self.W_torch_validate is not None:
+                del self.W_torch_validate
             self.W_torch_validate = torch.tensor(W_validate, dtype=torch.float, requires_grad=False)
 
         self.store_var_all_iters = store_var_all_iters
@@ -130,26 +131,25 @@ class OSMM:
             else:
                 self.method_results["var_iters"] = np.zeros((self.n0, self.n1, 1))
         self.method_results["soln"] = None
-        self.method_results["objf_iters"] = np.zeros(max_iter)
-        self.method_results["objf_validate_iters"] = np.zeros(max_iter)
+        self.method_results["objf_iters"] = np.ones(max_iter) * np.inf
+        self.method_results["objf_validate_iters"] = np.ones(max_iter) * np.inf
         self.method_results["lower_bound_iters"] = -np.ones(max_iter) * np.inf
         self.method_results["f_grad_norm_iters"] = np.zeros(max_iter)
-        self.method_results["opt_res_iters"] = np.zeros(max_iter)
+        self.method_results["rms_res_iters"] = np.zeros(max_iter)
         self.method_results["q_norm_iters"] = np.zeros(max_iter)
         self.method_results["v_norm_iters"] = np.zeros(max_iter)
-        self.method_results["lambd_iters"] = np.zeros(max_iter)
+        self.method_results["lam_iters"] = np.zeros(max_iter)
         self.method_results["mu_iters"] = np.ones(max_iter)
         self.method_results["t_iters"] = np.zeros(max_iter)
-        self.method_results["num_f_evas_line_search_iters"] = np.zeros(max_iter)
-        self.method_results["runtime_iters"] = np.zeros(max_iter)
-        self.method_results["time_cost_detail_iters"] = np.zeros((4, max_iter))
-        self.method_results["iters_taken"] = 0
+        self.method_results["num_f_evals_iters"] = np.zeros(max_iter)
+        self.method_results["time_iters"] = np.zeros(max_iter)
+        self.method_results["time_detail_iters"] = np.zeros((4, max_iter))
+        self.method_results["total_iters"] = 0
 
         osmm_method = OsmmUpdate(self)
 
-        subprob, x_k, objf_k, objf_validate_k, f_k, f_grad_k, g_k, lam_k, f_grads_iters_value, f_const_iters_value, \
-        G_k, diag_H_k \
-            = osmm_method.initialization(init_val, hessian_rank, gradient_memory, alg_mode, tau_min, init_by_Hutchinson)
+        subprobs, x_k, objf_k, objf_validate_k, f_k, f_grad_k, g_k, lam_k, f_grads_memory, f_consts_memory, G_k\
+            = osmm_method.initialization(init_val, hessian_rank, gradient_memory, tau_min, init_by_Hutchinson)
         lower_bound_k = -np.inf
         mu_k = mu_0
         if self.n1 == 0:
@@ -157,9 +157,11 @@ class OSMM:
         else:
             self.method_results["var_iters"][:, :, 0] = x_k
         self.method_results["objf_iters"][0] = objf_k
-        self.method_results["lambd_iters"][0] = lam_k
         if self.W_torch_validate is not None:
             self.method_results["objf_validate_iters"][0] = objf_validate_k
+        self.method_results["f_grad_norm_iters"][0] = np.linalg.norm(f_grad_k)
+        self.method_results["lam_iters"][0] = lam_k
+        self.method_results["mu_iters"][0] = mu_k
 
         update_func = partial(osmm_method.update_func, verbose=verbose, alg_mode=alg_mode, hessian_rank=hessian_rank,
                               gradient_memory=gradient_memory, solver=solver, check_gap_frequency=check_gap_frequency,
@@ -169,42 +171,38 @@ class OSMM:
 
         iter_idx = 1
         stopping_criteria_satisfied = False
-        while iter_idx < max_iter and (not stop_early or iter_idx < 10 or not stopping_criteria_satisfied):
+        while iter_idx < max_iter and (not use_termination_criteria or iter_idx < 10 or not stopping_criteria_satisfied):
             start_time = time.time()
 
             stopping_criteria_satisfied, x_k_plus_one, objf_k_plus_one, g_k_plus_one, lower_bound_k_plus_one, \
-            f_grad_k_plus_one, f_grads_iters_value, f_const_iters_value, G_k_plus_one, diag_H_k_plus_one, \
-            lam_k_plus_one, mu_k_plus_one \
-                = update_func(subprob, iter_idx, objf_k, g_k, lower_bound_k, f_grad_k,
-                              f_grads_iters_value, f_const_iters_value, G_k, diag_H_k, lam_k, mu_k)
+            f_grad_k_plus_one, f_grads_memory, f_consts_memory, G_k_plus_one, lam_k_plus_one, mu_k_plus_one \
+                = update_func(subprobs, iter_idx, objf_k, g_k, lower_bound_k, f_grad_k,
+                              f_grads_memory, f_consts_memory, G_k, lam_k, mu_k)
 
             end_time = time.time()
             runtime = end_time - start_time
-            self.method_results["runtime_iters"][iter_idx] = runtime
+            self.method_results["time_iters"][iter_idx] = runtime
             iter_idx += 1
             objf_k = objf_k_plus_one
             g_k = g_k_plus_one
             lower_bound_k = lower_bound_k_plus_one
             f_grad_k = f_grad_k_plus_one
             G_k = G_k_plus_one
-            diag_H_k = diag_H_k_plus_one
             lam_k = lam_k_plus_one
             mu_k = mu_k_plus_one
 
         self.x_var_cvxpy.value = self.method_results["soln"]
         for var in self.g_additional_var_val:
             var.value = self.g_additional_var_val[var]
+        total_iters = self.method_results["total_iters"]
         if verbose:
-            iters_taken = self.method_results["iters_taken"]
             if self.W_torch_validate is not None:
                 print("      Terminated. Num iterations = {}, objf = {:.3e}, lower bound = {:.3e}, RMS residual = {:.3e}, sampling acc = {:.3e}."
-                      .format(iters_taken, objf_k, lower_bound_k,
-                              self.method_results["opt_res_iters"][iters_taken] / np.sqrt(self.n),
-                              np.abs(self.method_results["objf_validate_iters"][iters_taken] - objf_k)))
+                      .format(total_iters, objf_k, lower_bound_k, self.method_results["rms_res_iters"][total_iters],
+                              np.abs(self.method_results["objf_validate_iters"][total_iters] - objf_k)))
             else:
                 print("      Terminated. Num iterations = {}, objf = {:.3e}, lower bound = {:.3e}, RMS residual = {:.3e}."\
-                      .format(iters_taken, objf_k, lower_bound_k,
-                              self.method_results["opt_res_iters"][iters_taken] / np.sqrt(self.n)))
-            print("      Time elapsed (secs): %f." % np.sum(self.method_results["runtime_iters"]))
+                      .format(total_iters, objf_k, lower_bound_k, self.method_results["rms_res_iters"][total_iters]))
+            print("      Time elapsed (secs): %f." % np.sum(self.method_results["time_iters"]))
             print("")
-        return np.min(self.method_results["objf_iters"][0:self.method_results["iters_taken"] + 1])
+        return np.min(self.method_results["objf_iters"][0:total_iters + 1])
