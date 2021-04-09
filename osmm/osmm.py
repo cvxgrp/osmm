@@ -174,9 +174,10 @@ class OSMM:
         while iter_idx < max_iter and (not use_termination_criteria or iter_idx < 10 or not stopping_criteria_satisfied):
             start_time = time.time()
 
-            stopping_criteria_satisfied, x_k_plus_one, objf_k_plus_one, g_k_plus_one, lower_bound_k_plus_one, \
-            f_grad_k_plus_one, f_grads_memory, f_consts_memory, G_k_plus_one, lam_k_plus_one, mu_k_plus_one \
-                = update_func(subprobs, iter_idx, objf_k, g_k, lower_bound_k, f_grad_k,
+            stopping_criteria_satisfied, x_k_plus_one, objf_k_plus_one, f_k_plus_one, g_k_plus_one, \
+            lower_bound_k_plus_one, f_grad_k_plus_one, f_grads_memory, f_consts_memory, G_k_plus_one, \
+            lam_k_plus_one, mu_k_plus_one \
+                = update_func(subprobs, iter_idx, objf_k, f_k, g_k, lower_bound_k, f_grad_k,
                               f_grads_memory, f_consts_memory, G_k, lam_k, mu_k)
 
             end_time = time.time()
@@ -185,6 +186,7 @@ class OSMM:
             iter_idx += 1
             objf_k = objf_k_plus_one
             g_k = g_k_plus_one
+            f_k = f_k_plus_one
             lower_bound_k = lower_bound_k_plus_one
             f_grad_k = f_grad_k_plus_one
             G_k = G_k_plus_one

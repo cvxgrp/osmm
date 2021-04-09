@@ -126,7 +126,7 @@ class OsmmUpdate:
         lam_k_plus_one = mu_k_plus_one * max(tau_min, tau_k_plus_one)
         return lam_k_plus_one, mu_k_plus_one
 
-    def update_func(self, subprobs, iter_idx, objf_k, g_k, lower_bound_k, f_grad_k,
+    def update_func(self, subprobs, iter_idx, objf_k, f_k, g_k, lower_bound_k, f_grad_k,
                     f_grads_memory, f_consts_memory, G_k, lam_k, mu_k, verbose=False,
                     alg_mode=None, hessian_rank=None, gradient_memory=None, solver=None,
                     gamma_inc=None, gamma_dec=None, mu_min=None, tau_min=None, mu_max=None, ep=None,
@@ -189,13 +189,13 @@ class OsmmUpdate:
                 = self._line_search(x_k_plus_half, xk, v_k_vec, g_k_plus_half, g_k, objf_k, G_k, lam_k, beta, j_max, alpha)
         else:
             x_k_plus_one = xk
-            f_k_plus_one = objf_k - g_k
+            f_k_plus_one = f_k
             tk = 0
             num_f_evals = 0
             f_eval_time_cost = 0
 
         self.osmm_problem.x_var_cvxpy.value = x_k_plus_one
-        if len(self.osmm_problem.g_additional_var_val) > 0:
+        if subp_solver_success and len(self.osmm_problem.g_additional_var_val) > 0:
             ub_g_k_plus_one = self.osmm_problem.g_objf.value
             subprobs.x_for_g_para.value = x_k_plus_one
             tmp_var_val = [var.value for var in subprobs.g_eval_subp.variables()]
@@ -213,8 +213,10 @@ class OsmmUpdate:
                 for i in range(len(tmp_var_val)):
                     var = subprobs.g_eval_subp.variables()[i]
                     var.value = tmp_var_val[i]
-        else:
+        elif subp_solver_success:
             g_k_plus_one = self.osmm_problem.g_objf.value
+        else:
+            g_k_plus_one = g_k
         objf_k_plus_one = f_k_plus_one + g_k_plus_one
 
         if objf_k_plus_one < np.min(self.osmm_problem.method_results["objf_iters"][0:iter_idx]):
@@ -319,5 +321,6 @@ class OsmmUpdate:
         self.osmm_problem.method_results["lower_bound_iters"][iter_idx] = lower_bound_k_plus_one
         self.osmm_problem.method_results["total_iters"] = iter_idx
 
-        return stopping_criteria_satisfied, x_k_plus_one, objf_k_plus_one, g_k_plus_one, lower_bound_k_plus_one, \
-               f_grad_k_plus_one, f_grads_memory, f_consts_memory, G_k_plus_one, lam_k_plus_one, mu_k_plus_one
+        return stopping_criteria_satisfied, x_k_plus_one, objf_k_plus_one, f_k_plus_one, g_k_plus_one, \
+               lower_bound_k_plus_one, f_grad_k_plus_one, f_grads_memory, f_consts_memory, G_k_plus_one, \
+               lam_k_plus_one, mu_k_plus_one
