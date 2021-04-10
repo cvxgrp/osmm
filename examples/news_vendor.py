@@ -2,6 +2,7 @@ import torch
 import autograd.numpy as np
 import cvxpy as cp
 from mosek.fusion import *
+import mosek as mosek
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -20,11 +21,12 @@ np.seterr(all='raise')
 
 n_product = 1000
 n = n_product + 1
-N = 10000
+N = 1000
 n_w = 2 * n_product
 B = np.random.uniform(low=0, high=0.02, size=(n_product, n_product))
+A = B.dot(B.T)
 cost_bound = 1.0
-eta = 0.5
+eta = 0.1
 
 mean_return1 = .05  # 1.25
 mean_return2 = -.1  # 0.85
@@ -61,13 +63,13 @@ def generate_random_data():
 
 
 def get_initial_val():
-    return np.ones(n)
+    return np.ones(n) * 0.001
 
 
 def my_g_cvxpy():
     q_var = cp.Variable(n)
     g = 0
-    constr = [cp.square(cp.norm(B.T @ q_var[0:n_product])) <= cost_bound, q_var[0:n-1] >= 0, q_var[n-1] >= 1e-10]
+    constr = [cp.square(cp.norm(B.T @ q_var[0:n_product])) <= cost_bound, q_var[0:n - 1] >= 0, q_var[n - 1] >= 1e-10]
     return q_var, g, constr
 
 
@@ -87,7 +89,7 @@ def my_f_torch(w_torch=None, q_torch=None, take_mean=True):
 
 #########################################################################
 ### baseline and plot
-def get_baseline_soln_cvxpy(W, compare_with_all=False):
+def get_baseline_soln_cvxpy(W, ep=1e-6, compare_MOSEK=False, compare_SCS=False, compare_ECOS=False):
     print("in baseline solver")
     D = W[0:n_w // 2, :]
     P = W[n_w // 2:n_w, :]
@@ -104,40 +106,59 @@ def get_baseline_soln_cvxpy(W, compare_with_all=False):
 
     constr1 = cp.sum(z) / N / (1 - eta) <= a_baseline_var
     constr2 = cp.constraints.exponential.ExpCone(-profits - u, cp.hstack([a_baseline_var for i in range(N)]), z)
-    constr3 = profits - revenues + cost[0] <= 0
+    constr3 = profits - revenues + cost <= 0
 
-    baseline_prob = cp.Problem(cp.Minimize(u), [cost <= cost_bound, constr1, constr2, constr3])
+    prob_baseline = cp.Problem(cp.Minimize(u), [cost <= cost_bound, constr1, constr2, constr3])
 
-    print("Start to solve baseline problem by MOSEK")
-    t0 = time.time()
-    baseline_prob.solve(solver="MOSEK", verbose=False)
-    print("  MOSEK + CVXPY time cost ", time.time() - t0)
-    print("  MOSEK solver time cost", baseline_prob.solver_stats.solve_time)
-    print("  Setup time cost", baseline_prob.solver_stats.setup_time)
-    print("  Objective value", baseline_prob.value)
-    print("  Solver status  " + baseline_prob.status + ".\n")
-    prob_baseline_val = baseline_prob.value
-    mosek_solve_time = baseline_prob.solver_stats.solve_time
+    prob_baseline_vals = []
+    solve_times = []
 
-    if compare_with_all:
-        q_baseline_var.value = None
+    if compare_MOSEK:
+        print("Start MOSEK")
+        t0 = time.time()
+        prob_baseline.solve(solver="MOSEK", verbose=True, mosek_params={
+            mosek.dparam.intpnt_co_tol_rel_gap: ep,
+            mosek.dparam.intpnt_co_tol_mu_red: ep,
+            mosek.dparam.intpnt_qo_tol_mu_red: ep,
+            mosek.dparam.intpnt_qo_tol_rel_gap: ep,
+            mosek.dparam.intpnt_tol_mu_red: ep,
+            mosek.dparam.intpnt_tol_rel_gap: ep
+        })
+        print("  MOSEK + CVXPY time cost ", time.time() - t0)
+        solve_times.append(time.time() - t0)
+        print("  MOSEK solver time cost", prob_baseline.solver_stats.solve_time)
+        print("  Setup time cost", prob_baseline.solver_stats.setup_time)
+        print("  Objective value", prob_baseline.value)
+        print("  Solver status  " + prob_baseline.status + ".\n")
+        prob_baseline_vals.append(prob_baseline.value)
+
+    if compare_SCS:
+        for var in prob_baseline.variables():
+            var.value = None
         print("Start to solve baseline problem by SCS")
         t0 = time.time()
-        baseline_prob.solve(solver="SCS", verbose=True)
+        prob_baseline.solve(solver="SCS", eps=ep, verbose=True, max_iters=10000)
         print("  SCS + CVXPY time cost ", time.time() - t0)
-        print("  Objective value", baseline_prob.value)
-        print("  Solver status  " + baseline_prob.status + ".\n")
+        solve_times.append(time.time() - t0)
+        print("  Objective value", prob_baseline.value)
+        print("  Solver status  " + prob_baseline.status + ".\n")
+        prob_baseline_vals.append(prob_baseline.value)
 
-        q_baseline_var.value = None
+    if compare_ECOS:
+        for var in prob_baseline.variables():
+            var.value = None
         print("Start to solve baseline problem by ECOS")
         t0 = time.time()
-        baseline_prob.solve(solver="ECOS", verbose=False)
+        prob_baseline.solve(solver="ECOS", verbose=True, abstol=ep)
         print("  ECOS + CVXPY time cost ", time.time() - t0)
-        print("  ECOS solver time cost", baseline_prob.solver_stats.solve_time)
-        print("  Setup time cost", baseline_prob.solver_stats.setup_time)
-        print("  Objective value", baseline_prob.value)
-        print("  Solver status  " + baseline_prob.status + ".\n")
-    return q_baseline_var.value, prob_baseline_val, mosek_solve_time
+        solve_times.append(time.time() - t0)
+        print("  ECOS solver time cost", prob_baseline.solver_stats.solve_time)
+        print("  Setup time cost", prob_baseline.solver_stats.setup_time)
+        print("  Objective value", prob_baseline.value)
+        print("  Solver status  " + prob_baseline.status + ".\n")
+        prob_baseline_vals.append(prob_baseline.value)
+
+    return prob_baseline_vals, solve_times
 
 
 def get_baseline_soln_mosek(W):
@@ -164,7 +185,7 @@ def get_baseline_soln_mosek(W):
     M.constraint(cost, Domain.lessThan(cost_bound))
     M.constraint(Expr.vstack(0.5, cost, Expr.mul(Matrix.dense(B.T), q_baseline_var)), Domain.inRotatedQCone())
     M.solve()
-    return np.concatenate([q_baseline_var.level(), a_baseline_var.level()]), u.level()
+    return u.level()
 
 
 def my_plot_one_result(W, x_best, is_save_fig=False, figname="newsvendor.pdf"):
@@ -194,8 +215,6 @@ def my_plot_one_result(W, x_best, is_save_fig=False, figname="newsvendor.pdf"):
     b = fig.add_subplot(gs[0, 1])
     D = W[0:n_w // 2, :]
     P = W[n_w // 2:n_w, :]
-    A = B.dot(B.T)
-
     cost = x_best[0:n_product].dot(A.dot(x_best[0:n_product]))
     profits = np.sum(P.T * (np.minimum(D.T, x_best[0:n_product])), axis=1) - cost
     weights = np.ones_like(profits) / len(profits)

@@ -6,6 +6,7 @@ import mosek as mosek
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import time
+
 # import sys; sys.path.insert(0, '..')
 # from osmm.osmm import OSMM
 
@@ -112,7 +113,7 @@ def my_f_torch(r_torch=None, b_torch=None, take_mean=True):
 
 #########################################################################
 ### baseline and plot
-def get_baseline_soln_cvxpy(R, compare_with_all=False):
+def get_baseline_soln_cvxpy(R, ep=1e-6, compare_MOSEK=False, compare_SCS=False, compare_ECOS=False):
     b_baseline_var = cp.Variable(n, nonneg=True)
     obj_baseline = -cp.sum(cp.log(R.T @ b_baseline_var)) / N
     constr_baseline = [cp.sum(b_baseline_var) == 1]
@@ -120,53 +121,56 @@ def get_baseline_soln_cvxpy(R, compare_with_all=False):
     b_baseline_var.value = np.ones(n) / n
     print("ini", obj_baseline.value)
     print("Start to solve baseline problem by MOSEK")
-    ep = 1e-6
-    t0 = time.time()
-    prob_baseline.solve(solver="MOSEK", verbose=True, mosek_params={
-        # mosek.dparam.intpnt_co_tol_pfeas: ep,
-        # mosek.dparam.intpnt_co_tol_dfeas: ep,
-        mosek.dparam.intpnt_co_tol_rel_gap: ep,
-        # mosek.dparam.intpnt_co_tol_infeas: ep,
-        mosek.dparam.intpnt_co_tol_mu_red: ep,
-        # mosek.dparam.intpnt_qo_tol_dfeas: ep,
-        # mosek.dparam.intpnt_qo_tol_infeas: ep,
-        mosek.dparam.intpnt_qo_tol_mu_red: ep,
-        # mosek.dparam.intpnt_qo_tol_pfeas: ep,
-        mosek.dparam.intpnt_qo_tol_rel_gap: ep,
-        # mosek.dparam.intpnt_tol_dfeas: ep,
-        # mosek.dparam.intpnt_tol_infeas: ep,
-        mosek.dparam.intpnt_tol_mu_red: ep,
-        # mosek.dparam.intpnt_tol_pfeas: ep,
-        mosek.dparam.intpnt_tol_rel_gap: ep
-    })
-    print("  MOSEK + CVXPY total time cost ", time.time() - t0)
-    print("  MOSEK solver time cost", prob_baseline.solver_stats.solve_time)
-    print("  Setup time cost", prob_baseline.solver_stats.setup_time)
-    print("  Objective value", prob_baseline.value)
-    print("  Solver status  " + prob_baseline.status + ".\n")
-    prob_baseline_val = prob_baseline.value
-    mosek_solve_time = prob_baseline.solver_stats.solve_time
 
-    if compare_with_all:
-        b_baseline_var.value = None
-        print("Start to solve baseline problem by SCS")
+    prob_baseline_vals = []
+    solve_times = []
+
+    if compare_MOSEK:
+        print("Start MOSEK")
         t0 = time.time()
-        prob_baseline.solve(solver="SCS", eps=ep, verbose=True)  # get the solve time info from verbose=True
-        print("  SCS + CVXPY total time cost ", time.time() - t0)
+        prob_baseline.solve(solver="MOSEK", verbose=True, mosek_params={
+            mosek.dparam.intpnt_co_tol_rel_gap: ep,
+            mosek.dparam.intpnt_co_tol_mu_red: ep,
+            mosek.dparam.intpnt_qo_tol_mu_red: ep,
+            mosek.dparam.intpnt_qo_tol_rel_gap: ep,
+            mosek.dparam.intpnt_tol_mu_red: ep,
+            mosek.dparam.intpnt_tol_rel_gap: ep
+        })
+        print("  MOSEK + CVXPY time cost ", time.time() - t0)
+        solve_times.append(time.time() - t0)
+        print("  MOSEK solver time cost", prob_baseline.solver_stats.solve_time)
+        print("  Setup time cost", prob_baseline.solver_stats.setup_time)
         print("  Objective value", prob_baseline.value)
         print("  Solver status  " + prob_baseline.status + ".\n")
+        prob_baseline_vals.append(prob_baseline.value)
 
-        b_baseline_var.value = None
+    if compare_SCS:
+        for var in prob_baseline.variables():
+            var.value = None
+        print("Start to solve baseline problem by SCS")
+        t0 = time.time()
+        prob_baseline.solve(solver="SCS", eps=ep, verbose=True, max_iters=10000)
+        print("  SCS + CVXPY time cost ", time.time() - t0)
+        solve_times.append(time.time() - t0)
+        print("  Objective value", prob_baseline.value)
+        print("  Solver status  " + prob_baseline.status + ".\n")
+        prob_baseline_vals.append(prob_baseline.value)
+
+    if compare_ECOS:
+        for var in prob_baseline.variables():
+            var.value = None
         print("Start to solve baseline problem by ECOS")
         t0 = time.time()
-        prob_baseline.solve(solver="ECOS", verbose=True, abstol=ep)#, reltol=ep, feastol=ep)
+        prob_baseline.solve(solver="ECOS", verbose=True, abstol=ep)
         print("  ECOS + CVXPY time cost ", time.time() - t0)
+        solve_times.append(time.time() - t0)
         print("  ECOS solver time cost", prob_baseline.solver_stats.solve_time)
         print("  Setup time cost", prob_baseline.solver_stats.setup_time)
         print("  Objective value", prob_baseline.value)
         print("  Solver status  " + prob_baseline.status + ".\n")
+        prob_baseline_vals.append(prob_baseline.value)
 
-    return b_baseline_var.value, prob_baseline_val, mosek_solve_time
+    return prob_baseline_vals, solve_times
 
 
 def get_baseline_soln_kelly_mosek(R):
@@ -176,7 +180,8 @@ def get_baseline_soln_kelly_mosek(R):
     objf = Expr.mul(Expr.sum(z), 1.0 / N)
     M.objective(ObjectiveSense.Minimize, objf)
     M.constraint(Expr.sum(b_baseline_var), Domain.equalsTo(1))
-    M.constraint(Expr.hstack(Expr.mul(Matrix.dense(R.T), b_baseline_var), Expr.constTerm(N, 1.0), Expr.neg(z)), Domain.inPExpCone())
+    M.constraint(Expr.hstack(Expr.mul(Matrix.dense(R.T), b_baseline_var), Expr.constTerm(N, 1.0), Expr.neg(z)),
+                 Domain.inPExpCone())
     M.solve()
     return b_baseline_var.level(), np.sum(z.level()) / N
 
