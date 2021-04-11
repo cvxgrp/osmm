@@ -21,8 +21,7 @@ print("device =", device)
 np.random.seed(0)
 np.seterr(all='raise')
 
-
-N_0 = 10000
+N_0 = 100000
 lam_reg = 1e-4
 
 d = 2
@@ -40,9 +39,10 @@ y = np.vstack([
     np.random.multivariate_normal(mu1, Sigma1, size=int(m * prob1)),
     np.random.multivariate_normal(mu2, Sigma2, size=int(m * prob2)),
     np.random.multivariate_normal(mu3, Sigma3, size=int(m * prob3))
-    ]).T
+]).T
 
-y = y / np.max(np.abs(y)) #normalized to [-1, 1]^2
+print("normalization constant", np.max(np.abs(y)))
+y = y / np.max(np.abs(y))  # normalized to [-1, 1]^2
 
 y_mean = np.mean(y, axis=1)
 y_cov = np.cov(y - y_mean[:, None])
@@ -74,8 +74,8 @@ def Dphi():
     z_acc = z_acc.T
     _, N = z_acc.shape
     log_pi_z = - log_sampling_normalizer_pdf.reshape((1, N)) - np.log(N_0)
-    Dphi_mtx = np.zeros((N, n, d)) #d=2
-    Dphi_mtx_transpose = np.zeros((N, d, n)) #d=2
+    Dphi_mtx = np.zeros((N, n, d))  # d=2
+    Dphi_mtx_transpose = np.zeros((N, d, n))  # d=2
     count = 0
     for i in range(degree + 1):
         for j in range(degree - i + 1):
@@ -131,75 +131,77 @@ def my_f_torch(w_torch=None, theta_torch=None):
     phi_z_torch = w_torch[0:n, :]
     log_pi_z_torch = w_torch[n_w - 1, :]
     A_theta = torch.logsumexp(torch.matmul(-phi_z_torch.T, theta_torch) + log_pi_z_torch, 0)
-    return A_theta + torch.matmul(theta_torch.T,  torch.tensor(c / m, dtype=torch.float))
+    return A_theta + torch.matmul(theta_torch.T, torch.tensor(c / m, dtype=torch.float))
 
 
 #########################################################################
 ### baseline and plot
-def get_baseline_soln_cvxpy(W, compare_with_all=False):
+def get_baseline_soln_cvxpy(W, ep=1e-6, compare_MOSEK=False, compare_SCS=False, compare_ECOS=False):
     phi_z = W[0:n, :]
     log_pi_z = W[n_w - 1, :]
     theta_var_baseline = cp.Variable(n)
     objf_baseline = c.T @ theta_var_baseline / m + cp.log_sum_exp(-phi_z.T @ theta_var_baseline + log_pi_z) \
                     + lam_reg * cp.quad_form(theta_var_baseline, D_reg)
     prob_baseline = cp.Problem(cp.Minimize(objf_baseline))
-    ep = 1e-6
-    print("Start to solve baseline problem by MOSEK")
-    t0 = time.time()
-    prob_baseline.solve(solver="MOSEK", verbose=True, mosek_params={
-        # mosek.dparam.intpnt_co_tol_pfeas: ep,
-        # mosek.dparam.intpnt_co_tol_dfeas: ep,
-        mosek.dparam.intpnt_co_tol_rel_gap: ep,
-        # mosek.dparam.intpnt_co_tol_infeas: ep,
-        mosek.dparam.intpnt_co_tol_mu_red: ep,
-        # mosek.dparam.intpnt_qo_tol_dfeas: ep,
-        # mosek.dparam.intpnt_qo_tol_infeas: ep,
-        mosek.dparam.intpnt_qo_tol_mu_red: ep,
-        # mosek.dparam.intpnt_qo_tol_pfeas: ep,
-        mosek.dparam.intpnt_qo_tol_rel_gap: ep,
-        # mosek.dparam.intpnt_tol_dfeas: ep,
-        # mosek.dparam.intpnt_tol_infeas: ep,
-        mosek.dparam.intpnt_tol_mu_red: ep,
-        # mosek.dparam.intpnt_tol_pfeas: ep,
-        mosek.dparam.intpnt_tol_rel_gap: ep
-    })
-    print("  MOSEK + CVXPY time cost ", time.time() - t0)
-    print("  MOSEK solver time cost", prob_baseline.solver_stats.solve_time)
-    print("  Setup time cost", prob_baseline.solver_stats.setup_time)
-    print("  Objective value", prob_baseline.value)
-    print("  Solver status  " + prob_baseline.status + ".\n")
-    prob_baseline_val = prob_baseline.value
-    mosek_solve_time = prob_baseline.solver_stats.solve_time
 
-    if compare_with_all:
-        theta_var_baseline.value = None
-        print("Start to solve baseline problem by SCS")
+    prob_baseline_vals = []
+    solve_times = []
+
+    if compare_MOSEK:
+        print("Start MOSEK")
         t0 = time.time()
-        prob_baseline.solve(solver="SCS", eps=ep, verbose=True)
-        print("  SCS + CVXPY time cost ", time.time() - t0)
+        prob_baseline.solve(solver="MOSEK", verbose=True, mosek_params={
+            mosek.dparam.intpnt_co_tol_rel_gap: ep,
+            mosek.dparam.intpnt_co_tol_mu_red: ep,
+            mosek.dparam.intpnt_qo_tol_mu_red: ep,
+            mosek.dparam.intpnt_qo_tol_rel_gap: ep,
+            mosek.dparam.intpnt_tol_mu_red: ep,
+            mosek.dparam.intpnt_tol_rel_gap: ep
+        })
+        print("  MOSEK + CVXPY time cost ", time.time() - t0)
+        solve_times.append(time.time() - t0)
+        print("  MOSEK solver time cost", prob_baseline.solver_stats.solve_time)
+        print("  Setup time cost", prob_baseline.solver_stats.setup_time)
         print("  Objective value", prob_baseline.value)
         print("  Solver status  " + prob_baseline.status + ".\n")
+        prob_baseline_vals.append(prob_baseline.value)
 
-        theta_var_baseline.value = None
+    if compare_SCS:
+        for var in prob_baseline.variables():
+            var.value = None
+        print("Start to solve baseline problem by SCS")
+        t0 = time.time()
+        prob_baseline.solve(solver="SCS", eps=ep, verbose=True, max_iters=10000)
+        print("  SCS + CVXPY time cost ", time.time() - t0)
+        solve_times.append(time.time() - t0)
+        print("  Objective value", prob_baseline.value)
+        print("  Solver status  " + prob_baseline.status + ".\n")
+        prob_baseline_vals.append(prob_baseline.value)
+
+    if compare_ECOS:
+        for var in prob_baseline.variables():
+            var.value = None
         print("Start to solve baseline problem by ECOS")
         t0 = time.time()
         prob_baseline.solve(solver="ECOS", verbose=True, abstol=ep)
         print("  ECOS + CVXPY time cost ", time.time() - t0)
+        solve_times.append(time.time() - t0)
         print("  ECOS solver time cost", prob_baseline.solver_stats.solve_time)
         print("  Setup time cost", prob_baseline.solver_stats.setup_time)
         print("  Objective value", prob_baseline.value)
         print("  Solver status  " + prob_baseline.status + ".\n")
+        prob_baseline_vals.append(prob_baseline.value)
 
-    return theta_var_baseline.value, prob_baseline_val, mosek_solve_time
+    return prob_baseline_vals, solve_times
 
 
-def my_plot_exp_density_one_result(Xs, objfs, iters_taken, is_save_fig=False, figname="exp_density.pdf"):
+def my_plot_exp_density_one_result(x_best, objfs, iters_taken, y, is_save_fig=False, figname="exp_density.pdf"):
     font = {'family': 'serif',
             'size': 16,
             }
 
     best_iter = np.argmin(objfs[0:iters_taken])
-    x_best = Xs[:, best_iter]
+    # x_best = Xs[:, best_iter]
     objf_best = objfs[best_iter]
     A_theta_value = objf_best - c.T.dot(x_best) / m
 
