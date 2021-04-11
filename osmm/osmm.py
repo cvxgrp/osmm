@@ -99,7 +99,7 @@ class OSMM:
               eps_gap_abs=1e-4, eps_gap_rel=1e-4, eps_res_abs=1e-4, eps_res_rel=1e-4,
               check_gap_frequency=10, store_var_all_iters=True, verbose=False, use_termination_criteria=True,
               init_by_Hutchinson=True, tau_min=1e-3, mu_min=1e-4, mu_max=1e5, mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8,
-              alpha=0.05, beta=0.5, j_max=10, ep=1e-15):
+              alpha=0.05, beta=0.5, j_max=10, ep=1e-15, use_cvxpy_param=False):
 
         assert hessian_rank >= 0
         assert gradient_memory >= 1
@@ -149,7 +149,7 @@ class OSMM:
         osmm_method = OsmmUpdate(self)
 
         subprobs, x_k, objf_k, objf_validate_k, f_k, f_grad_k, g_k, lam_k, f_grads_memory, f_consts_memory, G_k\
-            = osmm_method.initialization(init_val, hessian_rank, gradient_memory, tau_min, init_by_Hutchinson)
+            = osmm_method.initialization(init_val, hessian_rank, gradient_memory, tau_min, init_by_Hutchinson, use_cvxpy_param)
         lower_bound_k = -np.inf
         mu_k = mu_0
         if self.n1 == 0:

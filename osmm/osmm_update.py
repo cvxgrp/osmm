@@ -12,23 +12,29 @@ class OsmmUpdate:
         self.osmm_problem = osmm_problem
         self.curvature_update = CurvatureUpdate(osmm_problem)
 
-    def initialization(self, init_val, hessian_rank, gradient_memory, tau_min, init_by_Hutchison):
+    def initialization(self, init_val, hessian_rank, gradient_memory, tau_min, init_by_Hutchison, use_cvxpy_param):
         x_0 = init_val
         f_0 = self.osmm_problem.f_value(x_0)
         f_grad_0 = self.osmm_problem.f_grad_value(x_0)
-
-        subprobs = Subproblem(self.osmm_problem.x_var_cvxpy, self.osmm_problem.g_constrs, self.osmm_problem.g_objf,
-                              hessian_rank=hessian_rank, gradient_memory=gradient_memory)
-        subprobs.x_for_g_para.value = x_0
+        if use_cvxpy_param:
+            subprobs = Subproblem(self.osmm_problem.x_var_cvxpy, self.osmm_problem.g_constrs, self.osmm_problem.g_objf,
+                                  hessian_rank=hessian_rank, gradient_memory=gradient_memory)
+        else:
+            subprobs = None
+        if subprobs is not None:
+            subprobs.x_for_g_para.value = x_0
+            g_eval_subp = subprobs.g_eval_subp
+        else:
+            g_eval_subp = cp.Problem(cp.Minimize(self.osmm_problem.g_objf),
+                                     self.osmm_problem.g_constrs + [self.osmm_problem.x_var_cvxpy == x_0])
         try:
-            subprobs.g_eval_subp.solve()
-            if subprobs.g_eval_subp.value is not None and subprobs.g_eval_subp.value < np.inf:
+            g_eval_subp.solve()
+            if g_eval_subp.value is not None and g_eval_subp.value < np.inf:
                 g_0 = self.osmm_problem.g_objf.value
             else:
                 g_0 = np.inf
         except Exception as e:
             g_0 = np.inf
-
         objf_0 = f_0 + g_0
         if objf_0 < np.inf:
             self.osmm_problem.method_results["soln"] = x_0
@@ -132,18 +138,6 @@ class OsmmUpdate:
                     gamma_inc=None, gamma_dec=None, mu_min=None, tau_min=None, mu_max=None, ep=None,
                     beta=None, j_max=None, alpha=None, check_gap_frequency=None,
                     eps_gap_abs=None, eps_gap_rel=None, eps_res_abs=None, eps_res_rel=None):
-        if solver == "OSQP":
-            cvxpy_subp = cp.Problem(cp.Minimize(subprobs.f_hat_k + self.osmm_problem.g_objf + subprobs.trust_penalty),
-                                    self.osmm_problem.g_constrs + subprobs.bundle_constr)
-            lower_bound_subp = cp.Problem(cp.Minimize(subprobs.l_k + self.osmm_problem.g_objf),
-                                          self.osmm_problem.g_constrs + subprobs.bundle_constr)
-            g_eval_subp = cp.Problem(cp.Minimize(self.osmm_problem.g_objf), self.osmm_problem.g_constrs +
-                                     [self.osmm_problem.x_var_cvxpy == subprobs.x_for_g_para])
-        else:
-            cvxpy_subp = subprobs.cvxpy_subp
-            lower_bound_subp = subprobs.lower_bound_subp
-            g_eval_subp = subprobs.g_eval_subp
-
         if self.osmm_problem.store_var_all_iters:
             if self.osmm_problem.n1 == 0:
                 xk = np.array(self.osmm_problem.method_results["var_iters"][:, iter_idx - 1])
@@ -154,13 +148,40 @@ class OsmmUpdate:
                 xk = np.array(self.osmm_problem.method_results["var_iters"][:, 0])
             else:
                 xk = np.array(self.osmm_problem.method_results["var_iters"][:, :, 0])
-        subprobs.x_prev_para.value = xk
-        subprobs.f_grads_iters_para.value = f_grads_memory
-        subprobs.f_const_iters_para.value = f_consts_memory
-        subprobs.sqrt_lam_para.value = np.sqrt(lam_k)
-        subprobs.x_prev_times_sqrt_lam_para.value = xk * np.sqrt(lam_k)
-        subprobs.G_para.value = G_k
-        subprobs.G_T_x_prev_para.value = G_k.T.dot(xk.flatten(order='F'))
+
+        if subprobs is not None:
+            if solver == "OSQP":
+                cvxpy_subp = cp.Problem(cp.Minimize(subprobs.f_hat_k + self.osmm_problem.g_objf + subprobs.trust_penalty),
+                                        self.osmm_problem.g_constrs + subprobs.bundle_constr)
+                lower_bound_subp = cp.Problem(cp.Minimize(subprobs.l_k + self.osmm_problem.g_objf),
+                                              self.osmm_problem.g_constrs + subprobs.bundle_constr)
+                g_eval_subp = cp.Problem(cp.Minimize(self.osmm_problem.g_objf), self.osmm_problem.g_constrs +
+                                         [self.osmm_problem.x_var_cvxpy == subprobs.x_for_g_para])
+            else:
+                cvxpy_subp = subprobs.cvxpy_subp
+                lower_bound_subp = subprobs.lower_bound_subp
+                g_eval_subp = subprobs.g_eval_subp
+            subprobs.x_prev_para.value = xk
+            subprobs.f_grads_iters_para.value = f_grads_memory
+            subprobs.f_const_iters_para.value = f_consts_memory
+            subprobs.sqrt_lam_para.value = np.sqrt(lam_k)
+            subprobs.x_prev_times_sqrt_lam_para.value = xk * np.sqrt(lam_k)
+            subprobs.G_para.value = G_k
+            subprobs.G_T_x_prev_para.value = G_k.T.dot(xk.flatten(order='F'))
+            bundle_constr = subprobs.bundle_constr
+        else:
+            l_k = cp.Variable(1)
+            trust_penalty = 0.5 * cp.sum_squares(self.osmm_problem.x_var_cvxpy * np.sqrt(lam_k) - xk * np.sqrt(lam_k))
+            if len(self.osmm_problem.x_var_cvxpy.shape) <= 1:
+                f_curvature = 0.5 * cp.sum_squares(G_k.T @ self.osmm_problem.x_var_cvxpy - G_k.T.dot(xk))
+                bundle_constr = [f_grads_memory.T @ self.osmm_problem.x_var_cvxpy + f_consts_memory <= l_k]
+            else:
+                f_curvature = 0.5 * cp.sum_squares(G_k.T @ cp.vec(self.osmm_problem.x_var_cvxpy) - G_k.T.dot(xk.flatten(order='F')))
+                bundle_constr = [f_grads_memory.T @ cp.vec(self.osmm_problem.x_var_cvxpy) + f_consts_memory <= l_k]
+            cvxpy_subp = cp.Problem(cp.Minimize(l_k + f_curvature + self.osmm_problem.g_objf + trust_penalty),
+                                    self.osmm_problem.g_constrs + bundle_constr)
+            lower_bound_subp = cp.Problem(cp.Minimize(l_k + self.osmm_problem.g_objf),
+                                          self.osmm_problem.g_constrs + bundle_constr)
 
         begin_solve_time = time.time()
         subp_solver_success = True
@@ -177,7 +198,7 @@ class OsmmUpdate:
         x_k_plus_half = self.osmm_problem.x_var_cvxpy.value
         v_k = x_k_plus_half - xk
         g_k_plus_half = self.osmm_problem.g_objf.value
-        bundle_dual = subprobs.bundle_constr[0].dual_value
+        bundle_dual = bundle_constr[0].dual_value
 
         if self.osmm_problem.n1 == 0:
             v_k_vec = v_k
@@ -197,8 +218,12 @@ class OsmmUpdate:
         self.osmm_problem.x_var_cvxpy.value = x_k_plus_one
         if subp_solver_success and len(self.osmm_problem.g_additional_var_val) > 0:
             ub_g_k_plus_one = self.osmm_problem.g_objf.value
-            subprobs.x_for_g_para.value = x_k_plus_one
-            tmp_var_val = [var.value for var in subprobs.g_eval_subp.variables()]
+            if subprobs is not None:
+                subprobs.x_for_g_para.value = x_k_plus_one
+            else:
+                g_eval_subp = cp.Problem(cp.Minimize(self.osmm_problem.g_objf),
+                                         self.osmm_problem.g_constrs + [self.osmm_problem.x_var_cvxpy == x_k_plus_one])
+            tmp_var_val = [var.value for var in g_eval_subp.variables()]
             g_eval_success = True
             try:
                 g_eval_subp.solve(solver=solver)
@@ -211,7 +236,7 @@ class OsmmUpdate:
             else:
                 g_k_plus_one = ub_g_k_plus_one
                 for i in range(len(tmp_var_val)):
-                    var = subprobs.g_eval_subp.variables()[i]
+                    var = g_eval_subp.variables()[i]
                     var.value = tmp_var_val[i]
         elif subp_solver_success:
             g_k_plus_one = self.osmm_problem.g_objf.value
