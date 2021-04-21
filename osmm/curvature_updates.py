@@ -2,17 +2,18 @@ import numpy as np
 
 
 class CurvatureUpdate:
-    def __init__(self, osmm_problem):
+    def __init__(self, osmm_problem, hessian_rank):
         self.osmm_problem = osmm_problem
+        self.hessian_rank = hessian_rank
 
-    def low_rank_quasi_Newton_update(self, G_k, xcur, xprev, grad_cur, grad_prev, hessian_rank, tol_1=1e-10, tol_2=1e-2,
+    def low_rank_quasi_Newton_update(self, G_k, xcur, xprev, grad_cur, grad_prev, tol_1=1e-10, tol_2=1e-2,
                                      ep=1e-15):
         s = xcur - xprev
         y = grad_cur - grad_prev
         y_abs_too_small_idxes = np.where(np.abs(y) <= ep)[0]
         y[y_abs_too_small_idxes] = 0
         yTs = y.T.dot(s)
-        r1 = hessian_rank
+        r1 = self.hessian_rank
         w = G_k.T.dot(s)
         if yTs < max(tol_1, np.linalg.norm(y) * np.linalg.norm(s) * tol_2):
             if np.linalg.norm(s) < tol_2 * np.linalg.norm(xprev) or np.linalg.norm(w) < tol_1:
@@ -33,12 +34,14 @@ class CurvatureUpdate:
             _, R1_tilde = np.linalg.qr(np.transpose(P.dot(tmp)))
             R1 = P.dot(R1_tilde.T.dot(P))
             new_G1 = np.concatenate([y.reshape((self.osmm_problem.n, 1)), G1], axis=1).dot(R1)  # n by r1+1
-        if r1 == hessian_rank:
-            G_k_plus_one = new_G1[:, 0:hessian_rank]
         else:
-            r2 = hessian_rank - max(0, r1)
-            w2 = w[hessian_rank - r2:hessian_rank]
-            G2 = G_k[:, hessian_rank - r2:hessian_rank]
+            new_G1 = None
+        if r1 == self.hessian_rank:
+            G_k_plus_one = new_G1[:, 0:self.hessian_rank]
+        else:
+            r2 = self.hessian_rank - max(0, r1)
+            w2 = w[self.hessian_rank - r2:self.hessian_rank]
+            G2 = G_k[:, self.hessian_rank - r2:self.hessian_rank]
             basis, _, _ = np.linalg.svd(w2.reshape((r2, 1)))
             Q2 = np.array(basis)
             Q2[:, r2 - 1] = basis[:, 0]
@@ -49,8 +52,8 @@ class CurvatureUpdate:
                 G_k_plus_one = np.concatenate([new_G1, new_G2], axis=1)
             else:
                 G_k_plus_one = G_k
-                G_k_plus_one[:, 0:hessian_rank - 1] = new_G2
-                G_k_plus_one[:, hessian_rank - 1] = np.zeros(self.osmm_problem.n)
+                G_k_plus_one[:, 0:self.hessian_rank - 1] = new_G2
+                G_k_plus_one[:, self.hessian_rank - 1] = np.zeros(self.osmm_problem.n)
         return G_k_plus_one
 
     # def low_rank_diag_update(self, x, H_rank):

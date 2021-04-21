@@ -65,7 +65,6 @@ class OSMM:
 
     def f_hess_tr_Hutchinson(self, x, max_iter=100, tol=1e-3):
         est_tr = 0
-        new_est_tr = 0
         it = 0
         while it < max_iter:
             f_torch, x_torch = self._f(x)
@@ -96,10 +95,10 @@ class OSMM:
         return est_tr
 
     def solve(self, W, init_val, W_validate=None, max_iter=200, hessian_rank=20, gradient_memory=20, solver="ECOS",
-              eps_gap_abs=1e-4, eps_gap_rel=1e-4, eps_res_abs=1e-4, eps_res_rel=1e-4,
-              check_gap_frequency=10, store_var_all_iters=True, verbose=False, use_termination_criteria=True,
+              eps_gap_abs=1e-4, eps_gap_rel=1e-3, eps_res_abs=1e-4, eps_res_rel=1e-3, check_gap_frequency=10,
+              store_var_all_iters=True, verbose=False, use_termination_criteria=True, use_cvxpy_param=False,
               init_by_Hutchinson=True, tau_min=1e-3, mu_min=1e-4, mu_max=1e5, mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8,
-              alpha=0.05, beta=0.5, j_max=10, ep=1e-15, use_cvxpy_param=False):
+              alpha=0.05, beta=0.5, j_max=10, ep=1e-15):
 
         assert hessian_rank >= 0
         assert gradient_memory >= 1
@@ -146,28 +145,24 @@ class OSMM:
         self.method_results["time_detail_iters"] = np.zeros((4, max_iter))
         self.method_results["total_iters"] = 0
 
-        osmm_method = OsmmUpdate(self)
+        osmm_method = OsmmUpdate(self, hessian_rank, gradient_memory, use_cvxpy_param, solver, tau_min, mu_min, mu_max,
+                                 gamma_inc, gamma_dec, alpha, beta, j_max, eps_gap_abs, eps_gap_rel, eps_res_abs,
+                                 eps_res_rel, verbose, alg_mode, check_gap_frequency)
 
-        subprobs, x_k, objf_k, objf_validate_k, f_k, f_grad_k, g_k, lam_k, f_grads_memory, f_consts_memory, G_k\
-            = osmm_method.initialization(init_val, hessian_rank, gradient_memory, tau_min, init_by_Hutchinson, use_cvxpy_param)
+        objf_k, objf_validate_k, f_k, f_grad_k, g_k, lam_k, f_grads_memory, f_consts_memory, G_k\
+            = osmm_method.initialization(init_val, init_by_Hutchinson)
         lower_bound_k = -np.inf
         mu_k = mu_0
+        x_k = init_val
         if self.n1 == 0:
             self.method_results["var_iters"][:, 0] = x_k
         else:
             self.method_results["var_iters"][:, :, 0] = x_k
         self.method_results["objf_iters"][0] = objf_k
-        if self.W_torch_validate is not None:
-            self.method_results["objf_validate_iters"][0] = objf_validate_k
+        self.method_results["objf_validate_iters"][0] = objf_validate_k
         self.method_results["f_grad_norm_iters"][0] = np.linalg.norm(f_grad_k)
         self.method_results["lam_iters"][0] = lam_k
         self.method_results["mu_iters"][0] = mu_k
-
-        update_func = partial(osmm_method.update_func, verbose=verbose, alg_mode=alg_mode, hessian_rank=hessian_rank,
-                              gradient_memory=gradient_memory, solver=solver, check_gap_frequency=check_gap_frequency,
-                              mu_min=mu_min, tau_min=tau_min, mu_max=mu_max, gamma_inc=gamma_inc, gamma_dec=gamma_dec,
-                              beta=beta, j_max=j_max, alpha=alpha, ep=ep, eps_gap_abs=eps_gap_abs,
-                              eps_gap_rel=eps_gap_rel, eps_res_abs=eps_res_abs, eps_res_rel=eps_res_rel)
 
         iter_idx = 1
         stopping_criteria_satisfied = False
@@ -177,8 +172,8 @@ class OSMM:
             stopping_criteria_satisfied, x_k_plus_one, objf_k_plus_one, f_k_plus_one, g_k_plus_one, \
             lower_bound_k_plus_one, f_grad_k_plus_one, f_grads_memory, f_consts_memory, G_k_plus_one, \
             lam_k_plus_one, mu_k_plus_one \
-                = update_func(subprobs, iter_idx, objf_k, f_k, g_k, lower_bound_k, f_grad_k,
-                              f_grads_memory, f_consts_memory, G_k, lam_k, mu_k)
+                = osmm_method.update_func(iter_idx, objf_k, f_k, g_k, lower_bound_k, f_grad_k,
+                              f_grads_memory, f_consts_memory, G_k, lam_k, mu_k, ep)
 
             end_time = time.time()
             runtime = end_time - start_time
