@@ -22,8 +22,8 @@ np.random.seed(0)
 np.seterr(all='raise')
 
 N_0 = 100000
-lam_reg = 1e-4
-
+lam_reg = 0
+importance_sampling = False
 d = 2
 m = 2000
 Sigma1 = np.diag([0.5 ** 2] * d)
@@ -32,7 +32,7 @@ Sigma3 = np.diag([0.5 ** 2] * d)
 mu1 = 1.0 * np.ones(d)
 mu2 = -1.0 * np.ones(d)
 mu3 = np.array([1.0, -1.0])
-prob1 = .4
+prob1 = 0.4
 prob2 = .3
 prob3 = .3
 y = np.vstack([
@@ -102,13 +102,20 @@ n_w = n + 1
 
 
 def generate_random_data():
-    z = np.random.multivariate_normal(y_mean, y_cov * 1.1, N_0)
-    z_inf_norms = np.max(np.abs(z), axis=1)
-    z_acc = z[z_inf_norms <= 1, :]
-    log_sampling_normalizer_pdf = multivariate_normal.logpdf(z_acc, y_mean, y_cov * 1.1)
-    z_acc = z_acc.T
+    if importance_sampling:
+        z = np.random.multivariate_normal(y_mean, y_cov * 1.1, N_0)
+        z_inf_norms = np.max(np.abs(z), axis=1)
+        z_acc = z[z_inf_norms <= 1, :]
+        log_sampling_normalizer_pdf = multivariate_normal.logpdf(z_acc, y_mean, y_cov * 1.1)
+        z_acc = z_acc.T
+    else:
+        z_acc = np.zeros((2, N_0))
+        for j in range(int(np.sqrt(N_0))):
+            for i in range(int(np.sqrt(N_0))):
+                z_acc[0, i + j * int(np.sqrt(N_0))] = -1 + i * 2 / int(np.sqrt(N_0))
+                z_acc[1, i + j * int(np.sqrt(N_0))] = -1 + j * 2 / int(np.sqrt(N_0))
+        log_sampling_normalizer_pdf = np.log(np.ones(N_0) / 4)
     _, N = z_acc.shape
-    print("N_0 = ", N_0, "N=", N)
     log_pi_z = - log_sampling_normalizer_pdf.reshape((1, N)) - np.log(N_0)
     phi_z = phi(z_acc)
     W = np.concatenate([phi_z, log_pi_z])

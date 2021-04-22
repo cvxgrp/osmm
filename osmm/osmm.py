@@ -173,7 +173,7 @@ class OSMM:
             lower_bound_k_plus_one, f_grad_k_plus_one, f_grads_memory, f_consts_memory, G_k_plus_one, \
             lam_k_plus_one, mu_k_plus_one \
                 = osmm_method.update_func(iter_idx, objf_k, f_k, g_k, lower_bound_k, f_grad_k,
-                              f_grads_memory, f_consts_memory, G_k, lam_k, mu_k, ep)
+                                          f_grads_memory, f_consts_memory, G_k, lam_k, mu_k, ep)
 
             end_time = time.time()
             runtime = end_time - start_time

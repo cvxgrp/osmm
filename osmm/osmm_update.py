@@ -153,30 +153,18 @@ class OsmmUpdate:
         lam_k_plus_one = mu_k_plus_one * max(self.tau_min, tau_k_plus_one)
         return lam_k_plus_one, mu_k_plus_one
 
-    def update_func(self, iter_idx, objf_k, f_k, g_k, lower_bound_k, f_grad_k, f_grads_memory, f_consts_memory, G_k,
-                    lam_k, mu_k, ep):
-        if self.osmm_problem.store_var_all_iters:
-            if self.osmm_problem.n1 == 0:
-                xk = np.array(self.osmm_problem.method_results["var_iters"][:, iter_idx - 1])
-            else:
-                xk = np.array(self.osmm_problem.method_results["var_iters"][:, :, iter_idx - 1])
-        else:
-            if self.osmm_problem.n1 == 0:
-                xk = np.array(self.osmm_problem.method_results["var_iters"][:, 0])
-            else:
-                xk = np.array(self.osmm_problem.method_results["var_iters"][:, :, 0])
-
+    def _get_subproblems(self, xk, f_grads_memory, f_consts_memory, lam_k, G_k):
         if self.subprobs_param is not None:
             if self.solver == "OSQP":
-                cvxpy_subp = cp.Problem(cp.Minimize(self.subprobs_param.f_hat_k + self.osmm_problem.g_objf
-                                                    + self.subprobs_param.trust_penalty),
-                                        self.osmm_problem.g_constrs + self.subprobs_param.bundle_constr)
+                tentative_update_subp = cp.Problem(cp.Minimize(self.subprobs_param.f_hat_k + self.osmm_problem.g_objf
+                                                               + self.subprobs_param.trust_penalty),
+                                                   self.osmm_problem.g_constrs + self.subprobs_param.bundle_constr)
                 lower_bound_subp = cp.Problem(cp.Minimize(self.subprobs_param.l_k + self.osmm_problem.g_objf),
                                               self.osmm_problem.g_constrs + self.subprobs_param.bundle_constr)
                 g_eval_subp = cp.Problem(cp.Minimize(self.osmm_problem.g_objf), self.osmm_problem.g_constrs +
                                          [self.osmm_problem.x_var_cvxpy == self.subprobs_param.x_for_g_para])
             else:
-                cvxpy_subp = self.subprobs_param.cvxpy_subp
+                tentative_update_subp = self.subprobs_param.cvxpy_subp
                 lower_bound_subp = self.subprobs_param.lower_bound_subp
                 g_eval_subp = self.subprobs_param.g_eval_subp
             self.subprobs_param.x_prev_para.value = xk
@@ -197,20 +185,39 @@ class OsmmUpdate:
                 f_curvature = 0.5 * cp.sum_squares(G_k.T @ cp.vec(self.osmm_problem.x_var_cvxpy)
                                                    - G_k.T.dot(xk.flatten(order='F')))
                 bundle_constr = [f_grads_memory.T @ cp.vec(self.osmm_problem.x_var_cvxpy) + f_consts_memory <= l_k]
-            cvxpy_subp = cp.Problem(cp.Minimize(l_k + f_curvature + self.osmm_problem.g_objf + trust_penalty),
-                                    self.osmm_problem.g_constrs + bundle_constr)
+            tentative_update_subp = cp.Problem(cp.Minimize(l_k + f_curvature + self.osmm_problem.g_objf + trust_penalty),
+                                               self.osmm_problem.g_constrs + bundle_constr)
             lower_bound_subp = cp.Problem(cp.Minimize(l_k + self.osmm_problem.g_objf),
                                           self.osmm_problem.g_constrs + bundle_constr)
+            g_eval_subp = None
+        return tentative_update_subp, lower_bound_subp, g_eval_subp, bundle_constr
+
+    def update_func(self, iter_idx, objf_k, f_k, g_k, lower_bound_k, f_grad_k, f_grads_memory, f_consts_memory, G_k,
+                    lam_k, mu_k, ep):
+        if self.osmm_problem.store_var_all_iters:
+            if self.osmm_problem.n1 == 0:
+                xk = np.array(self.osmm_problem.method_results["var_iters"][:, iter_idx - 1])
+            else:
+                xk = np.array(self.osmm_problem.method_results["var_iters"][:, :, iter_idx - 1])
+        else:
+            if self.osmm_problem.n1 == 0:
+                xk = np.array(self.osmm_problem.method_results["var_iters"][:, 0])
+            else:
+                xk = np.array(self.osmm_problem.method_results["var_iters"][:, :, 0])
+
+        tentative_update_subp, lower_bound_subp, g_eval_subp, bundle_constr = self._get_subproblems(xk, f_grads_memory,
+                                                                                                    f_consts_memory,
+                                                                                                    lam_k, G_k)
 
         begin_solve_time = time.time()
         subp_solver_success = True
         try:
-            cvxpy_subp.solve(solver=self.solver)
+            tentative_update_subp.solve(solver=self.solver)
         except Exception as e:
             subp_solver_success = False
             if self.verbose:
                 print("tentative update error:", e)
-        if (cvxpy_subp.status != "optimal" and cvxpy_subp.status != "inaccurate_optimal") or \
+        if (tentative_update_subp.status != "optimal" and tentative_update_subp.status != "inaccurate_optimal") or \
                 self.osmm_problem.x_var_cvxpy.value is None:
             subp_solver_success = False
             self.osmm_problem.x_var_cvxpy.value = xk
@@ -243,7 +250,7 @@ class OsmmUpdate:
                 self.subprobs_param.x_for_g_para.value = x_k_plus_one
             else:
                 g_eval_subp = cp.Problem(cp.Minimize(self.osmm_problem.g_objf),
-                                         self.osmm_problem.g_constrs + [self.osmm_problem.x_var_cvxpy == x_k_plus_half])
+                                         self.osmm_problem.g_constrs + [self.osmm_problem.x_var_cvxpy == x_k_plus_one])
             tmp_var_val = [var.value for var in g_eval_subp.variables()]
             g_eval_success = True
             try:
@@ -307,7 +314,6 @@ class OsmmUpdate:
 
         tr_H_k_plus_one = np.square(max(ep, np.linalg.norm(G_k_plus_one, 'fro')))
         tau_k_plus_one = tr_H_k_plus_one / self.osmm_problem.n / min(self.hessian_rank, iter_idx)
-
         lam_k_plus_one, mu_k_plus_one = self._update_trust_params(mu_k, tk, tau_k_plus_one)
 
         begin_eval_L_k_time = 0
@@ -355,7 +361,6 @@ class OsmmUpdate:
                 self.osmm_problem.method_results["var_iters"][:, :, 0] = x_k_plus_one
         self.osmm_problem.method_results["v_norm_iters"][iter_idx] = np.linalg.norm(v_k_vec)
         self.osmm_problem.method_results["objf_iters"][iter_idx] = objf_k_plus_one
-        # if self.osmm_problem.W_torch_validate is not None:
         self.osmm_problem.method_results["objf_validate_iters"][iter_idx] = objf_validation_k_plus_one
         self.osmm_problem.method_results["num_f_evals_iters"][iter_idx] = num_f_evals
         self.osmm_problem.method_results["q_norm_iters"][iter_idx] = np.linalg.norm(q_k_plus_one_vec)

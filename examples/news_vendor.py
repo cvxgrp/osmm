@@ -19,33 +19,39 @@ print("device =", device)
 np.random.seed(0)
 np.seterr(all='raise')
 
-n_product = 1000
+n_product = 500
 n = n_product + 1
 N = 1000
 n_w = 2 * n_product
-B = np.random.uniform(low=0, high=0.02, size=(n_product, n_product))
-A = B.dot(B.T)
-cost_bound = 1.0
-eta = 0.1
+# B = np.random.uniform(low=0, high=0.02, size=(n_product, n_product))
+# B_torch = torch.tensor(B, dtype=torch.float)
+# A = B.dot(B.T)
+prod_linear = np.random.uniform(low=0.2, high=0.9, size=(n_product))
+prod_linear_2 = 0.5 * prod_linear
+prod_change_pnts = np.random.uniform(low=0.01, high=0.03, size=(n_product))
+prod_amount_bounds = 5 * prod_change_pnts
+prod_linear_torch = torch.tensor(prod_linear, dtype=torch.float)
+prod_linear_2_torch = torch.tensor(prod_linear_2, dtype=torch.float)
+prod_change_pnts_torch = torch.tensor(prod_change_pnts, dtype=torch.float)
 
-mean_return1 = .05  # 1.25
-mean_return2 = -.1  # 0.85
+
+cost_bound = 1.0
+eta = 0.9
+
+mean_return1 = .2  # 1.25
 sigma_idyo = .05
-sigma_fact = .30  # .2
+sigma_fact = .3  # .2
 NFACT = 5  # 5
 
-factors_1 = np.matrix(np.random.uniform(size=(n_w, NFACT)))
-Sigma1 = np.diag([sigma_idyo ** 2] * n_w) + factors_1 * np.diag([sigma_fact ** 2] * NFACT) * factors_1.T
+factors_1 = np.random.randn(n_w, NFACT)#np.matrix(np.random.uniform(size=(n_w, NFACT)))
+# Sigma1 = np.diag([sigma_idyo ** 2] * n_w) + factors_1 * np.diag([sigma_fact ** 2] * NFACT) * factors_1.T #/ NFACT
+Sigma1 = 0.1 * factors_1.dot(factors_1.T)
 
-factors_2 = np.matrix(np.random.uniform(size=(n_w, NFACT)))
-Sigma2 = np.diag([sigma_idyo ** 2] * n_w) + factors_2 * np.diag([sigma_fact ** 2] * NFACT) * factors_2.T
-Sigma2 *= 2
+# mu1 = mean_return1 + np.random.randn(n_w) * mean_return1 / 3.
+mu1 = np.random.uniform(low=-mean_return1, high=0, size=(n_w))
 
-mu1 = mean_return1 + np.random.randn(n_w) * mean_return1 / 3.
-mu2 = mean_return2 + np.random.randn(n_w) * mean_return2 / 3.
-
-prob1 = .5
-prob2 = .5
+prob1 = 1.0
+prob2 = 0
 
 
 def generate_random_data():
@@ -53,7 +59,6 @@ def generate_random_data():
     def draw_batch_returns(N_DRAWS):
         result = np.vstack([
             np.exp(np.random.multivariate_normal(mu1, Sigma1, size=int(N_DRAWS * prob1))),
-            np.exp(np.random.multivariate_normal(mu2, Sigma2, size=int(N_DRAWS * prob2)))
         ])
         np.random.shuffle(result)
         return result
@@ -67,9 +72,11 @@ def get_initial_val():
 
 
 def my_g_cvxpy():
-    q_var = cp.Variable(n)
+    q_var = cp.Variable(n, nonneg=True)
     g = 0
-    constr = [cp.square(cp.norm(B.T @ q_var[0:n_product])) <= cost_bound, q_var[0:n - 1] >= 0, q_var[n - 1] >= 1e-10]
+#     production_cost = cp.square(cp.norm(B.T @ q_var[0:n_product])) + prod_linear.T @ q_var[0:n_product]
+    production_cost = prod_linear.T @ q_var[0:n_product] + prod_linear_2.T @ cp.pos(q_var[0:n_product] - prod_change_pnts)
+    constr = [production_cost <= cost_bound, q_var[0:n - 1] <= prod_amount_bounds, q_var[n - 1] >= 1e-10]
     return q_var, g, constr
 
 
@@ -80,8 +87,9 @@ def my_f_torch(w_torch=None, q_torch=None, take_mean=True):
     _, batch_size = w_torch.shape
     d_torch = w_torch[0:n_w // 2, :]
     p_torch = w_torch[n_w // 2:n_w, :]
-    B_torch = torch.tensor(B, dtype=torch.float)
-    phi = torch.square(torch.norm(torch.matmul(B_torch.T, q_torch[0:n_product])))
+    phi = torch.matmul(prod_linear_torch.T, q_torch[0:n_product]) + torch.matmul(prod_linear_2_torch.T, torch.relu(q_torch[0:n_product] - prod_change_pnts_torch))
+#     phi = torch.square(torch.norm(torch.matmul(B_torch.T, q_torch[0:n_product]))) \
+#     + torch.matmul(torch.tensor(prod_linear, dtype=torch.float).T, q_torch[0:n_product])
     profits = torch.sum(p_torch * torch.min(d_torch, q_torch[0:n_product, None]), axis=0) - phi
     objf = q_torch[n - 1] * torch.logsumexp(-profits / q_torch[n - 1] - np.log(batch_size) - np.log(1 - eta), 0)
     return objf
@@ -100,15 +108,16 @@ def get_baseline_soln_cvxpy(W, ep=1e-6, compare_MOSEK=False, compare_SCS=False, 
     z = cp.Variable(N, nonneg=True)
     profits = cp.Variable(N)
 
-    cost = cp.square(cp.norm(B.T @ q_baseline_var))
+    production_cost = prod_linear.T @ q_baseline_var + prod_linear_2.T @ cp.pos(q_baseline_var - prod_change_pnts)
     sales = cp.vstack([cp.minimum(D[i, :], q_baseline_var[i]) for i in range(n_product)])  # n_w by N
     revenues = cp.sum(cp.multiply(P, sales), axis=0)  # N
 
     constr1 = cp.sum(z) / N / (1 - eta) <= a_baseline_var
     constr2 = cp.constraints.exponential.ExpCone(-profits - u, cp.hstack([a_baseline_var for i in range(N)]), z)
-    constr3 = profits - revenues + cost <= 0
+    constr3 = profits - revenues + production_cost <= 0
 
-    prob_baseline = cp.Problem(cp.Minimize(u), [cost <= cost_bound, constr1, constr2, constr3])
+    prob_baseline = cp.Problem(cp.Minimize(u), [production_cost <= cost_bound, q_baseline_var <= prod_amount_bounds,
+                                                constr1, constr2, constr3])
 
     prob_baseline_vals = []
     solve_times = []
@@ -161,31 +170,31 @@ def get_baseline_soln_cvxpy(W, ep=1e-6, compare_MOSEK=False, compare_SCS=False, 
     return prob_baseline_vals, solve_times
 
 
-def get_baseline_soln_mosek(W):
-    D = W[0:n_product, :]
-    P = W[n_product:n_w, :]
-    M = Model()
-    q_baseline_var = M.variable(n_product, Domain.greaterThan(0.))
-    a_baseline_var = M.variable(1, Domain.greaterThan(0.))
-    u = M.variable(1)
-    z = M.variable(N, Domain.greaterThan(0.))
-    sales = M.variable([n_product, N], Domain.greaterThan(0.))
-    cost = M.variable(1, Domain.greaterThan(0.))
-    M.objective(ObjectiveSense.Minimize, u)
-
-    M.constraint(Expr.sub(sales, Matrix.dense(D)), Domain.lessThan(0.))
-    M.constraint(Expr.sub(sales, Expr.hstack([q_baseline_var for i in range(N)])), Domain.lessThan(0.))
-
-    M.constraint(Expr.sub(Expr.mul(Expr.sum(z), 1.0 / N / (1 - eta)), a_baseline_var), Domain.lessThan(0.))
-
-    neg_profit = Expr.sub(Expr.repeat(cost, N, 0), Expr.sum(Expr.mulElm(Matrix.dense(P), sales), 0))
-
-    M.constraint(Expr.hstack(z, Expr.repeat(a_baseline_var, N, 0), Expr.sub(neg_profit, Expr.repeat(u, N, 0))),
-                 Domain.inPExpCone())
-    M.constraint(cost, Domain.lessThan(cost_bound))
-    M.constraint(Expr.vstack(0.5, cost, Expr.mul(Matrix.dense(B.T), q_baseline_var)), Domain.inRotatedQCone())
-    M.solve()
-    return u.level()
+# def get_baseline_soln_mosek(W):
+#     D = W[0:n_product, :]
+#     P = W[n_product:n_w, :]
+#     M = Model()
+#     q_baseline_var = M.variable(n_product, Domain.greaterThan(0.))
+#     a_baseline_var = M.variable(1, Domain.greaterThan(0.))
+#     u = M.variable(1)
+#     z = M.variable(N, Domain.greaterThan(0.))
+#     sales = M.variable([n_product, N], Domain.greaterThan(0.))
+#     cost = M.variable(1, Domain.greaterThan(0.))
+#     M.objective(ObjectiveSense.Minimize, u)
+#
+#     M.constraint(Expr.sub(sales, Matrix.dense(D)), Domain.lessThan(0.))
+#     M.constraint(Expr.sub(sales, Expr.hstack([q_baseline_var for i in range(N)])), Domain.lessThan(0.))
+#
+#     M.constraint(Expr.sub(Expr.mul(Expr.sum(z), 1.0 / N / (1 - eta)), a_baseline_var), Domain.lessThan(0.))
+#
+#     neg_profit = Expr.sub(Expr.repeat(cost, N, 0), Expr.sum(Expr.mulElm(Matrix.dense(P), sales), 0))
+#
+#     M.constraint(Expr.hstack(z, Expr.repeat(a_baseline_var, N, 0), Expr.sub(neg_profit, Expr.repeat(u, N, 0))),
+#                  Domain.inPExpCone())
+#     M.constraint(cost, Domain.lessThan(cost_bound))
+#     M.constraint(Expr.vstack(0.5, cost, Expr.mul(Matrix.dense(B.T), q_baseline_var)), Domain.inRotatedQCone())
+#     M.solve()
+#     return u.level()
 
 
 def my_plot_one_result(W, x_best, is_save_fig=False, figname="newsvendor.pdf"):
@@ -197,11 +206,11 @@ def my_plot_one_result(W, x_best, is_save_fig=False, figname="newsvendor.pdf"):
 
     a = fig.add_subplot(gs[0, 0])  # gs[0, :]
     a.stem([i for i in range(1, n - 1)], x_best[0:n - 2], markerfmt=" ", label="Solution")
-    print("t and a", x_best[n - 2:n])
+    print("a", x_best[-1])
     a.set_xlabel("Product", fontsize=fontsize)
     a.set_ylabel("Quantity of Product", fontsize=fontsize)
     a.set_yscale("log")
-    a.set_ylim([1e-2, 1e2])
+#     a.set_ylim([1e-2, 1e2])
 
     labels = []
     labels.append((mpatches.Patch(color="blue"), "Solution"))
@@ -215,17 +224,18 @@ def my_plot_one_result(W, x_best, is_save_fig=False, figname="newsvendor.pdf"):
     b = fig.add_subplot(gs[0, 1])
     D = W[0:n_w // 2, :]
     P = W[n_w // 2:n_w, :]
-    cost = x_best[0:n_product].dot(A.dot(x_best[0:n_product]))
+    cost = x_best[0:n_product].T.dot(prod_linear) + np.maximum(x_best[0:n_product] - prod_change_pnts, 0).T.dot(prod_linear_2)
+#     cost = x_best[0:n_product].dot(A.dot(x_best[0:n_product]))
     profits = np.sum(P.T * (np.minimum(D.T, x_best[0:n_product])), axis=1) - cost
     weights = np.ones_like(profits) / len(profits)
     b.hist(profits, weights=weights, bins=50)
     b.axvline(profits.mean(), color='k', linestyle='dashed', linewidth=linewidth)
-    b.text(profits.mean() * 1.6, 0.1, 'Mean: {:.2f}'.format(profits.mean()), fontsize=fontsize)
+    b.text(profits.mean(), 0.1, 'Mean: {:.2f}'.format(profits.mean()), fontsize=fontsize)
     # b.set_title(r"Histogram of Profit ($\eta$={:.2f})".format(eta), fontsize=fontsize)
     b.set_xlabel("Profit", fontsize=fontsize)
     b.set_ylabel(r"Empirical Density ($\eta$={:.2f})".format(eta), fontsize=fontsize)
     b.set_yscale("log")
-    print("cost = ", cp.quad_form(x_best[0:n_product], A).value)
+    print("cost = ", cost)
 
     #####################################################################
     if is_save_fig:
