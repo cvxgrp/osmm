@@ -245,7 +245,7 @@ There are some optional arguments for the `solve` method.
 * `check_gap_frequency` is the number of iterations between when we check the gap. Default is 10.
 * `solver` must be one of the solvers supported by CVXPY. Default value is `'ECOS'`.
 * `verbose` is a boolean giving the choice of printing information during the iterations. Default value is `False`.
-* `use_cvxpy_param` is a boolean giving the choise of using CVXPY parameters. Default value is `False`.
+* `use_cvxpy_param` is a boolean giving the choice of using CVXPY parameters. Default value is `False`.
 * `store_var_all_iters` is a boolean giving the choice of whether the updates of `x` in all iterations are stored. Default value is `True`.
 * The following tolerances are used in the stopping criteria.
     * `eps_gap_abs` and `eps_gap_rel` are the absolute and the relative tolerances on the gap between upper and lower bounds on the optimum objective, respectively. Default values are `1e-4` and `1e-3`, respectively.
