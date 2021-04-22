@@ -30,18 +30,25 @@ OSMM(f_torch, g_cvxpy)
 ```
 which generates an object defining the form of the problem, and a member function of the `OSMM` class
 ```python
-solve(W, init_val)
+solve(init_val, W)
 ```
-which specifies the problem, runs the solve method, and returns the optimal objective value.
+which specifies the problem with data `W`, runs the solve method with initial value `init_val`, and returns the optimal objective value.
+If there is no data matrix, then the solve method can be called by `solve(init_val)` without `W`.
 
 ### Required arguments
 For the construction method of the `OSMM` class, the arguments `f_torch` and `g_cvxpy` define the form of the problem.
-* `f_torch` must be a function with two inputs and one output. The first and the second inputs are the PyTorch tensors for `W` and `x`, respectively. The output is a PyTorch tensor for the scalar function value of `f`.
-* `g_cvxpy` must be a function with no input and three outputs. The first output is a CVXPY variable for `x`, the second one is a CVXPY expression for the objective function in `g`, the third one is a list of constraints contained in `g`.
+* `f_torch` must be a function with one or two inputs and one output. 
+    * The first input is a PyTorch tensor for `x`. 
+    * If there is a data matrix `W` in the problem, then the second input is a PyTorch tensor for `W` and must be named `W_torch`. 
+    * The output is a PyTorch tensor for the scalar function value of `f`.
+* `g_cvxpy` must be a function with no input and three outputs. 
+    * The first output is a CVXPY variable for `x`. 
+    * The second output is a CVXPY expression for the objective function in `g`. 
+    * The third output is a list of constraints contained in `g`.
 
-For the solve method, the argument `W` specifies the problem to be solved, and `init_val` gives an initial value of `x`.
-* `W` must be a scalar, a numpy array, or a numpy matrix.
+For the solve method, the argument `W` (if exists) specifies the problem to be solved, and `init_val` gives an initial value of `x`.
 * `init_val` must be a scalar, a numpy array, or a numpy matrix that is in the same shape as `x`. It must be in the domain of `f`.
+* If there is a data matrix in the problem, then `W` must be a scalar, a numpy array, or a numpy matrix.
 
 ### Examples
 **1. Basic example.** We take the following Kelly gambling problem as one example
