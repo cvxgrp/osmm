@@ -72,8 +72,8 @@ N = 10000
 x_var = cp.Variable(n, nonneg=True)
 
 # Define f by torch.
-def my_f_torch(w_torch, x_torch):
-    objf = -torch.mean(torch.log(torch.matmul(w_torch.T, x_torch)))
+def my_f_torch(x_torch, W_torch):
+    objf = -torch.mean(torch.log(torch.matmul(W_torch.T, x_torch)))
     return objf
 
 # Define g by CVXPY.
@@ -92,7 +92,7 @@ init_val = np.ones(n) / n
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
 
 # Call the solve method, and the optimal objective value is returned by it.
-opt_obj_val = osmm_prob.solve(W, init_val)
+opt_obj_val = osmm_prob.solve(init_val, W)
 
 # A solution for x is stored in x_var.value.
 print("x solution = ", x_var.value)
@@ -131,16 +131,16 @@ def my_g_cvxpy():
     constr = [cp.sum(A_var, axis=0) <= np.ones(d)]
     return A_var, g, constr
 
-def my_f_torch(w_torch, A_torch):
-    d_torch = w_torch[0:m, :]
-    p_torch = w_torch[m:2 * m, :]
+def my_f_torch(A_torch, W_torch):
+    d_torch = W_torch[0:m, :]
+    p_torch = W_torch[m:2 * m, :]
     s_torch = torch.tensor(s, dtype=torch.float, requires_grad=False)
     retail_node_amount = torch.matmul(A_torch, s_torch)
     ave_revenue = torch.sum(p_torch * torch.min(d_torch, retail_node_amount[:, None])) / N
     return -ave_revenue
     
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
-result = osmm_prob.solve(W, init_val)
+result = osmm_prob.solve(init_val, W)
 ```
 
 **3. Additional variables in g.** `osmm` accepts variables additional to `x` in `g`. Take the following simplified power flow problem as an example
@@ -191,13 +191,13 @@ def my_g_cvxpy():
     g = 0
     return x_var, g, constr
 
-def my_f_torch(w_torch=None, x_torch=None):
-    s_torch = w_torch[0:n, :]
-    d_torch = w_torch[n:n * 2, :]
+def my_f_torch(x_torch, W_torch):
+    s_torch = W_torch[0:n, :]
+    d_torch = W_torch[n:n * 2, :]
     return torch.mean(torch.sum(torch.relu(-d_torch.T - s_torch.T - x_torch), axis=1))
 
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
-result = osmm_prob.solve(W, init_val)
+result = osmm_prob.solve(init_val, W)
 ```
 
 For more examples, see the [`examples`](examples/) directory.
@@ -218,7 +218,7 @@ N = 100
 W_small = np.random.uniform(low=0.5, high=1.5, size=(n, N))
 
 t1 = time.time()
-opt_obj_val = osmm_prob.solve(W_small, init_val)
+opt_obj_val = osmm_prob.solve(init_val, W_small)
 print("N = 100, osmm time cost = %.2f, opt value = %.4f" % (time.time() - t1, opt_obj_val))
 # N = 100, osmm time cost = 0.33, opt value = -0.0557
 
@@ -232,7 +232,7 @@ N = 30000
 W_large = np.random.uniform(low=0.5, high=1.5, size=(n, N))
 
 t3 = time.time()
-opt_obj_val = osmm_prob.solve(W_large, init_val)
+opt_obj_val = osmm_prob.solve(init_val, W_large)
 print("N = 30,000, osmm time cost = %.2f, opt value = %.5f" % (time.time() - t3, opt_obj_val))
 # N = 30,000, osmm time cost = 1.43, opt value = -0.00074
 
