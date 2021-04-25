@@ -220,7 +220,7 @@ W_small = np.random.uniform(low=0.5, high=1.5, size=(n, N))
 t1 = time.time()
 opt_obj_val = osmm_prob.solve(init_val, W_small)
 print("N = 100, osmm time cost = %.2f, opt value = %.4f" % (time.time() - t1, opt_obj_val))
-# N = 100, osmm time cost = 0.33, opt value = -0.0557
+# N = 100, osmm time cost = 0.19, opt value = -0.0557
 
 cvx_prob = cp.Problem(cp.Minimize(-cp.sum(cp.log(W_small.T @ x_var)) / N), [cp.sum(x_var) == 1])
 t2 = time.time()
@@ -234,13 +234,13 @@ W_large = np.random.uniform(low=0.5, high=1.5, size=(n, N))
 t3 = time.time()
 opt_obj_val = osmm_prob.solve(init_val, W_large)
 print("N = 30,000, osmm time cost = %.2f, opt value = %.5f" % (time.time() - t3, opt_obj_val))
-# N = 30,000, osmm time cost = 1.43, opt value = -0.00074
+# N = 30,000, osmm time cost = 1.12, opt value = -0.00074
 
 cvx_prob = cp.Problem(cp.Minimize(-cp.sum(cp.log(W_large.T @ x_var)) / N), [cp.sum(x_var) == 1])
 t4 = time.time()
 opt_obj_val = cvx_prob.solve(solver="ECOS")
 print("N = 30,000, cvxpy time cost = %.2f, opt value = %.5f" % (time.time() - t4, opt_obj_val))
-# N = 30,000, cvxpy time cost = 39.11, opt value = -0.00074
+# N = 30,000, cvxpy time cost = 39.02, opt value = -0.00074
 ```
 
 ### Optional arguments
