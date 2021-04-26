@@ -13,6 +13,8 @@ The variable can be a scalar, a vector, or a matrix. It does not have to be name
 
 The implementation is based on our paper Minimizing Oracle-Structured Composite Functions [XXX add link].
 
+The current version is preliminary, and will be changing.
+
 ## Installation
 To install `osmm`, first clone the repo, and then from inside the directory run 
 ```
