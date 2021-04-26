@@ -1,7 +1,7 @@
 # osmm
 `osmm` is a Python package for oracle-structured minimization method, which solves problems in the following form
 
-![](https://github.com/cvxgrp/osmm/blob/main/svgs/eqn_1.png?raw=true)
+<img src="https://github.com/cvxgrp/osmm/blob/main/readme_figs/eqn1.png" width="200"/>
 
 where `x` is the variable, and `W` contains data and parameters that specify `f`. 
 The oracle function `f( ,W)` is convex in `x`, defined by PyTorch, and can be automatically differentiated by PyTorch. 
@@ -58,10 +58,9 @@ The `solve` method has one required argument, which gives an initial value of `x
 
 ### Examples
 **1. Basic example.** We take the following Kelly gambling problem as one example
-```
-minimize - \sum_{i=1}^N log(w_i'x) / N
-subject to x >= 0, x'1 = 1,
-```
+
+<img src="https://github.com/cvxgrp/osmm/blob/main/readme_figs/eqn2.png" width="250"/>
+
 where `x` is an `n` dimensional variable, and `w_i` for `i=1, ..., N` are given data.
 The objective function is `f`, the indicator function of the constraints is `g`, and the data matrix `W = [w_1, ..., w_N]`.
 The code is as follows.
@@ -105,14 +104,14 @@ print("x solution = ", x_var.value)
 ```
 
 **2. Matrix variable.** `osmm` accepts matrix variables. Take the following allocation problem as an example
-```
-minimize - \sum_{i=1}^N p_i' min(As, d_i) / N + t||A||_1
-subject to A >= 0, \sum_{j=1}^m A_ij <= 1,
-```
+
+
+<img src="https://github.com/cvxgrp/osmm/blob/main/readme_figs/eqn3.png" width="35%"/>
+
 where `A` is an `m` by `d` variable.
 The `d` dimensional vector `s`, the positive scalar `t`, 
 and the `m` dimensional vectors `p_i` and `d_i` are given. 
-The notation `|| ||_1` is the sum of absolute values of all entires.
+The l1 norm notation is the sum of absolute values of all entires.
 The first term in the objective function is `f`,
 the regularization term plus the indicator function of the constraints is `g`,
 and the data matrix `W = [(d_1, p_1), ..., (d_N, p_N)]`. 
@@ -150,10 +149,10 @@ result = osmm_prob.solve(init_val, W)
 ```
 
 **3. Additional variables in g.** `osmm` accepts variables additional to `x` in `g`. Take the following simplified power flow problem as an example
-```
-minimize \sum_{i=1}^N 1' (-d_i - s_i - x)_+ / N
-subject to Au + x = 0, ||u||_inf <= u_max, ||x||_inf <= x_max,
-```
+
+
+<img src="https://github.com/cvxgrp/osmm/blob/main/readme_figs/eqn4.png" width="45%"/>
+
 where `x` is an `n` dimensional variable, and `u` is an `m` dimensional variable.
 The graph incidence matrix `A`, the `n` dimensional vectors `d_i` and `s_i`,
 and the positive scalars `u_max` and `x_max` are given.
