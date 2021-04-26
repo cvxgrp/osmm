@@ -34,11 +34,10 @@ which creates an object defining the form of the problem, and a member function 
 solve(init_val, W)
 ```
 which specifies the problem with data matrix `W`, runs the solve method with initial value `init_val`, and returns the optimal objective value.
-If there is no data matrix, then the solve method can be called by 
+If there is no data matrix, then the solve method can be called by the following without `W`.
 ```python
 solve(init_val)
 ```
-without `W`.
 
 ### Arguments
 The construction method of the `OSMM` class has two required arguments `f_torch` and `g_cvxpy`, which define the form of the problem.
