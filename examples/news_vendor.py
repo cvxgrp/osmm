@@ -23,9 +23,6 @@ n_product = 500
 n = n_product + 1
 N = 1000
 n_w = 2 * n_product
-# B = np.random.uniform(low=0, high=0.02, size=(n_product, n_product))
-# B_torch = torch.tensor(B, dtype=torch.float)
-# A = B.dot(B.T)
 prod_linear = np.random.uniform(low=0.2, high=0.9, size=(n_product))
 prod_linear_2 = 0.5 * prod_linear
 prod_change_pnts = np.random.uniform(low=0.01, high=0.03, size=(n_product))
@@ -38,27 +35,21 @@ prod_change_pnts_torch = torch.tensor(prod_change_pnts, dtype=torch.float)
 cost_bound = 1.0
 eta = 0.9
 
-mean_return1 = .2  # 1.25
+mean_return1 = .2
 sigma_idyo = .05
-sigma_fact = .3  # .2
-NFACT = 5  # 5
+sigma_fact = .3
+NFACT = 5
 
-factors_1 = np.random.randn(n_w, NFACT)#np.matrix(np.random.uniform(size=(n_w, NFACT)))
-# Sigma1 = np.diag([sigma_idyo ** 2] * n_w) + factors_1 * np.diag([sigma_fact ** 2] * NFACT) * factors_1.T #/ NFACT
+factors_1 = np.random.randn(n_w, NFACT)
 Sigma1 = 0.1 * factors_1.dot(factors_1.T)
-
-# mu1 = mean_return1 + np.random.randn(n_w) * mean_return1 / 3.
 mu1 = np.random.uniform(low=-mean_return1, high=0, size=(n_w))
-
-prob1 = 1.0
-prob2 = 0
 
 
 def generate_random_data():
     # draw batch returns
     def draw_batch_returns(N_DRAWS):
         result = np.vstack([
-            np.exp(np.random.multivariate_normal(mu1, Sigma1, size=int(N_DRAWS * prob1))),
+            np.exp(np.random.multivariate_normal(mu1, Sigma1, size=int(N_DRAWS))),
         ])
         np.random.shuffle(result)
         return result
@@ -80,13 +71,10 @@ def my_g_cvxpy():
     return q_var, g, constr
 
 
-def my_f_torch(w_torch=None, q_torch=None, take_mean=True):
-    if take_mean == False:
-        print("take_mean must be true")
-        return None
-    _, batch_size = w_torch.shape
-    d_torch = w_torch[0:n_w // 2, :]
-    p_torch = w_torch[n_w // 2:n_w, :]
+def my_f_torch(q_torch=None, W_torch=None):
+    _, batch_size = W_torch.shape
+    d_torch = W_torch[0:n_w // 2, :]
+    p_torch = W_torch[n_w // 2:n_w, :]
     phi = torch.matmul(prod_linear_torch.T, q_torch[0:n_product]) + torch.matmul(prod_linear_2_torch.T, torch.relu(q_torch[0:n_product] - prod_change_pnts_torch))
 #     phi = torch.square(torch.norm(torch.matmul(B_torch.T, q_torch[0:n_product]))) \
 #     + torch.matmul(torch.tensor(prod_linear, dtype=torch.float).T, q_torch[0:n_product])
