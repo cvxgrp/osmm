@@ -9,7 +9,8 @@ The structured function `g` is convex, defined by CVXPY, and can contain constra
 
 Variable `x` can be a scalar, a vector, or a matrix.
 
-`osmm` is suitable for cases where `W` contains a large data matrix, as will be shown later when we introduce the efficiency.
+`osmm` is suitable for cases where `W` contains a large data matrix, as will be shown in an example later when we introduce the efficiency.
+
 The implementation is based on our paper Minimizing Oracle-Structured Composite Functions [XXX add link].
 
 ## Installation
@@ -28,27 +29,25 @@ python setup.py install
 ```python
 OSMM(f_torch, g_cvxpy)
 ```
-which generates an object defining the form of the problem, and a member function of the `OSMM` class
+which creates an object defining the form of the problem, and a member function of the `OSMM` class
 ```python
 solve(init_val, W)
 ```
-which specifies the problem with data `W`, runs the solve method with initial value `init_val`, and returns the optimal objective value.
+which specifies the problem with data matrix `W`, runs the solve method with initial value `init_val`, and returns the optimal objective value.
 If there is no data matrix, then the solve method can be called by `solve(init_val)` without `W`.
 
 ### Required arguments
-For the construction method of the `OSMM` class, the arguments `f_torch` and `g_cvxpy` define the form of the problem.
-* `f_torch` must be a function with one or two inputs and one output. 
-    * The first input is a PyTorch tensor for `x`. 
-    * If there is a data matrix `W` in the problem, then the second input is a PyTorch tensor for `W` and must be named `W_torch`. 
+For the construction method of the `OSMM` class, the required arguments `f_torch` and `g_cvxpy` define the form of the problem.
+* `f_torch` must be a function with one required input, one optional input, and one output.
+    * The first input (required) is a PyTorch tensor for `x`. 
+    * The second input (optional) is a PyTorch tensor for `W` and must be named `W_torch`. It is only needed when there is a data matrix in the problem.
     * The output is a PyTorch tensor for the scalar function value of `f`.
 * `g_cvxpy` must be a function with no input and three outputs. 
     * The first output is a CVXPY variable for `x`. 
     * The second output is a CVXPY expression for the objective function in `g`. 
     * The third output is a list of constraints contained in `g`.
 
-For the solve method, the argument `W` (if exists) specifies the problem to be solved, and `init_val` gives an initial value of `x`.
-* `init_val` must be a scalar, a numpy array, or a numpy matrix that is in the same shape as `x`. It must be in the domain of `f`.
-* If there is a data matrix in the problem, then `W` must be a scalar, a numpy array, or a numpy matrix.
+For the solve method, the required argument `init_val` gives an initial value of `x`. It must be a scalar, a numpy array, or a numpy matrix that is in the same shape as `x`. It must be in the domain of `f`.
 
 ### Examples
 **1. Basic example.** We take the following Kelly gambling problem as one example
@@ -245,6 +244,7 @@ print("N = 30,000, cvxpy time cost = %.2f, opt value = %.5f" % (time.time() - t4
 
 ### Optional arguments
 There are some optional arguments for the `solve` method.
+* `W` is a scalar, a numpy array, or a numpy matrix which specifies the problem to be solved.
 * `W_validate` is a scalar, a numpy array, or a numpy matrix in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy. Default is `None`.
 * `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. Default is `20`.
 *  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. Default is `20`.
