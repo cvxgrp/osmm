@@ -261,8 +261,8 @@ Other optinal arguments for the `solve` method are as follows.
 * `use_cvxpy_param` is a boolean giving the choice of using CVXPY parameters. Default value is `False`.
 * `store_var_all_iters` is a boolean giving the choice of whether the updates of `x` in all iterations are stored. Default value is `True`.
 * The following tolerances are used in the stopping criteria.
-    * `eps_gap_abs` and `eps_gap_rel` are the absolute and the relative tolerances on the gap between upper and lower bounds on the optimum objective, respectively. Default values are `1e-4` and `1e-3`, respectively.
-    * `eps_res_abs` and `eps_res_rel` are the absolute and the relative tolerances on a residue for an optimality condition, respectively. Default values are `1e-4` and `1e-3`, respectively.
+    * `eps_gap_abs` and `eps_gap_rel` are absolute and relative tolerances on the gap between upper and lower bounds on the optimal objective, respectively. Default values are `1e-4` and `1e-3`, respectively.
+    * `eps_res_abs` and `eps_res_rel` are absolute and relative tolerances on a residue for an optimality condition, respectively. Default values are `1e-4` and `1e-3`, respectively.
 
 ### Return values
 The optimal objective is returned by the `solve` method.
