@@ -21,7 +21,7 @@ print("device =", device)
 np.random.seed(0)#10
 np.seterr(all='raise')
 
-N = 1000000
+N = 10000
 n = 1000
 pi = np.random.uniform(0, 1, N)
 pi = pi / np.sum(pi)

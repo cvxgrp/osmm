@@ -20,7 +20,7 @@ np.random.seed(0)
 np.seterr(all='raise')
 
 eta = 0.8
-N = 1000000
+N = 10000
 m = 100
 n = m * 3 + 1
 n_w = m * 3
