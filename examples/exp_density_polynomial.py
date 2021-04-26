@@ -21,7 +21,7 @@ print("device =", device)
 np.random.seed(0)
 np.seterr(all='raise')
 
-N_0 = 100000
+N_0 = 10000
 lam_reg = 0
 importance_sampling = False
 d = 2
@@ -133,10 +133,10 @@ def my_g_cvxpy():
     return theta_var, g, constr
 
 
-def my_f_torch(w_torch=None, theta_torch=None):
-    _, batch_size = w_torch.shape
-    phi_z_torch = w_torch[0:n, :]
-    log_pi_z_torch = w_torch[n_w - 1, :]
+def my_f_torch(theta_torch=None, W_torch=None):
+    _, batch_size = W_torch.shape
+    phi_z_torch = W_torch[0:n, :]
+    log_pi_z_torch = W_torch[n_w - 1, :]
     A_theta = torch.logsumexp(torch.matmul(-phi_z_torch.T, theta_torch) + log_pi_z_torch, 0)
     return A_theta + torch.matmul(theta_torch.T, torch.tensor(c / m, dtype=torch.float))
 
