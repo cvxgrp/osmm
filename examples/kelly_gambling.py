@@ -50,9 +50,9 @@ def my_g_cvxpy():
     return x_var, g, constr
 
 
-def my_f_torch(w_torch=None, b_torch=None):
-    r_torch = w_torch[0:n, :]
-    pi_torch = w_torch[n, :]
+def my_f_torch(b_torch=None, W_torch=None):
+    r_torch = W_torch[0:n, :]
+    pi_torch = W_torch[n, :]
     if b_torch.shape == torch.Size([n]):
         tmp = torch.matmul(r_torch.T, b_torch)
     else:
