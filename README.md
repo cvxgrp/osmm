@@ -36,18 +36,22 @@ solve(init_val, W)
 which specifies the problem with data matrix `W`, runs the solve method with initial value `init_val`, and returns the optimal objective value.
 If there is no data matrix, then the solve method can be called by `solve(init_val)` without `W`.
 
-### Required arguments
-For the construction method of the `OSMM` class, the required arguments `f_torch` and `g_cvxpy` define the form of the problem.
-* `f_torch` must be a function with one required input, one optional input, and one output.
+### Arguments
+The construction method of the `OSMM` class has two required arguments `f_torch` and `g_cvxpy`, which define the form of the problem.
+* The first one `f_torch` must be a function with one required input, one optional input, and one output.
     * The first input (required) is a PyTorch tensor for `x`. 
     * The second input (optional) is a PyTorch tensor for `W` and must be named `W_torch`. It is only needed when there is a data matrix in the problem.
     * The output is a PyTorch tensor for the scalar function value of `f`.
-* `g_cvxpy` must be a function with no input and three outputs. 
+* The second one `g_cvxpy` must be a function with no input and three outputs. 
     * The first output is a CVXPY variable for `x`. 
     * The second output is a CVXPY expression for the objective function in `g`. 
     * The third output is a list of constraints contained in `g`.
 
-For the solve method, the required argument `init_val` gives an initial value of `x`. It must be a scalar, a numpy array, or a numpy matrix that is in the same shape as `x`. It must be in the domain of `f`.
+The solve method has one required argument, which gives an initial value of `x`, and several optional arguments.
+* `init_val` (required) must be a scalar, a numpy array, or a numpy matrix that is in the same shape as `x`, and it must be in the domain of `f`.
+* `W` (optional) is a scalar, a numpy array, or a numpy matrix which specifies the problem to be solved. It is only needed when there is a data matrix in the problem.
+* More optional arguments will be introduced later.
+
 
 ### Examples
 **1. Basic example.** We take the following Kelly gambling problem as one example
@@ -242,9 +246,8 @@ print("N = 30,000, cvxpy time cost = %.2f, opt value = %.5f" % (time.time() - t4
 # N = 30,000, cvxpy time cost = 39.02, opt value = -0.00074
 ```
 
-### Optional arguments
-There are some optional arguments for the `solve` method.
-* `W` is a scalar, a numpy array, or a numpy matrix which specifies the problem to be solved.
+### Other optional arguments
+Other optinal arguments for the `solve` method are as follows.
 * `W_validate` is a scalar, a numpy array, or a numpy matrix in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy. Default is `None`.
 * `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. Default is `20`.
 *  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. Default is `20`.
