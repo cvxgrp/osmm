@@ -1,8 +1,8 @@
 # osmm
 `osmm` is a Python package for oracle-structured minimization method, which solves problems in the following form
-<p align="center"><img src="https://rawgit.com/in	git@github.com:cvxgrp/osmm/main/svgs/7ced504a509cba428f39be281f04685a.svg?invert_in_darkmode" align=middle width=193.65888134999997pt height=16.438356pt/></p>
-where <img src="https://rawgit.com/in	git@github.com:cvxgrp/osmm/main/svgs/332cc365a4987aacce0ead01b8bdcc0b.svg?invert_in_darkmode" align=middle width=9.39498779999999pt height=14.15524440000002pt/> is the variable, and <img src="https://rawgit.com/in	git@github.com:cvxgrp/osmm/main/svgs/84c95f91a742c9ceb460a83f9b5090bf.svg?invert_in_darkmode" align=middle width=17.80826024999999pt height=22.465723500000017pt/> contains data and parameters that specify `f`. 
-The oracle function <img src="https://rawgit.com/in	git@github.com:cvxgrp/osmm/main/svgs/cbef4c40da4007f64508be98bab922aa.svg?invert_in_darkmode" align=middle width=47.71698689999999pt height=24.65753399999998pt/> is convex in `x`, defined by PyTorch, and can be automatically differentiated by PyTorch. 
+<p align="center"><img src="https://rawgit.com/in	git@github.com:cvxgrp/osmm/svgs/7ced504a509cba428f39be281f04685a.svg?invert_in_darkmode" align=middle width=193.65888134999997pt height=16.438356pt/></p>
+where <img src="https://rawgit.com/in	git@github.com:cvxgrp/osmm/None/svgs/332cc365a4987aacce0ead01b8bdcc0b.svg?invert_in_darkmode" align=middle width=9.39498779999999pt height=14.15524440000002pt/> is the variable, and <img src="https://rawgit.com/in	git@github.com:cvxgrp/osmm/None/svgs/84c95f91a742c9ceb460a83f9b5090bf.svg?invert_in_darkmode" align=middle width=17.80826024999999pt height=22.465723500000017pt/> contains data and parameters that specify `f`. 
+The oracle function <img src="https://rawgit.com/in	git@github.com:cvxgrp/osmm/None/svgs/cbef4c40da4007f64508be98bab922aa.svg?invert_in_darkmode" align=middle width=47.71698689999999pt height=24.65753399999998pt/> is convex in `x`, defined by PyTorch, and can be automatically differentiated by PyTorch. 
 The structured function `g` is convex, defined by CVXPY, and can contain constraints and variables additional to `x`.
 
 Variable `x` can be a scalar, a vector, or a matrix.
