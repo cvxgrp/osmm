@@ -7,7 +7,7 @@ where `x` is the variable, and `W` contains data and parameters that specify `f`
 The oracle function `f( ,W)` is convex in `x`, defined by PyTorch, and can be automatically differentiated by PyTorch. 
 The structured function `g` is convex, defined by CVXPY, and can contain constraints and variables additional to `x`.
 
-Variable `x` can be a scalar, a vector, or a matrix.
+The variable can be a scalar, a vector, or a matrix. It does not have to be named as `x` in the code.
 
 `osmm` is suitable for cases where `W` contains a large data matrix, as will be shown in an example later when we introduce the efficiency.
 
