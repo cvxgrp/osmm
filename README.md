@@ -14,10 +14,11 @@ The variable can be a scalar, a vector, or a matrix. It does not have to be name
 The implementation is based on our paper Minimizing Oracle-Structured Composite Functions [XXX add link].
 
 ## Installation
-To install `osmm`, please run 
+To install `osmm`, first clone the repo, and then from inside the directory run 
 ```
 python setup.py install
 ```
+This may require root access.
 
 `osmm` requires
 * [cvxpy](https://github.com/cvxgrp/cvxpy) >= 1.1.0a4
