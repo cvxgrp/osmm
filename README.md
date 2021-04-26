@@ -26,33 +26,36 @@ python setup.py install
 
 ## Usage
 `osmm` exposes the `OSMM` class 
-```python
-OSMM(f_torch, g_cvxpy)
+```python3
+osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
 ```
-which creates an object defining the form of the problem, and a member function of the `OSMM` class
-```python
-solve(init_val, W)
+which creates an object defining the form of the problem. A data matrix `W` specifying the problem can be passed in by setting
+```python3
+osmm_prob.f_torch.W = W
 ```
-which specifies the problem with data matrix `W`, runs the solve method with initial value `init_val`, and returns the optimal objective value.
-If there is no data matrix, then the solve method can be called by the following without `W`.
-```python
-solve(init_val)
+Then the solve function can be called by
+```python3
+osmm_prob.solve(init_val)
 ```
+which runs the solve method with initial value `init_val`, and returns the optimal objective value.
 
-### Arguments
-The construction method of the `OSMM` class has two required arguments `f_torch` and `g_cvxpy`, which define the form of the problem.
-* The first one `f_torch` must be a function with one required input, one optional input, and one output.
+
+### Arguments and attributes
+The construction method of the `OSMM` class has two required arguments, which define the form of the problem.
+* The first one defines `f`, and it must be a function with one required input, one optional input, and one output.
     * The first input (required) is a PyTorch tensor for `x`. 
     * The second input (optional) is a PyTorch tensor for `W` and must be named `W_torch`. It is only needed when there is a data matrix in the problem.
     * The output is a PyTorch tensor for the scalar function value of `f`.
-* The second one `g_cvxpy` must be a function with no input and three outputs. 
+* The second one defines `g`, and it must be a function with no input and three outputs. 
     * The first output is a CVXPY variable for `x`. 
     * The second output is a CVXPY expression for the objective function in `g`. 
     * The third output is a list of constraints contained in `g`.
 
+The `OSMM` class has an attribute `f_torch`, which is set at construction by the defined `f`. It has an attribution `W` which is a scalar, a numpy array, or a numpy matrix.
+
+
 The `solve` method has one required argument, which gives an initial value of `x`, and several optional arguments.
 * `init_val` (required) must be a scalar, a numpy array, or a numpy matrix that is in the same shape as `x`, and it must be in the domain of `f`.
-* `W` (optional) is a scalar, a numpy array, or a numpy matrix which specifies the problem to be solved. It is only needed when there is a data matrix in the problem.
 * More optional arguments will be introduced later.
 
 
@@ -248,9 +251,10 @@ print("N = 30,000, cvxpy time cost = %.2f, opt value = %.5f" % (time.time() - t4
 # N = 30,000, cvxpy time cost = 39.02, opt value = -0.00074
 ```
 
-### Other optional arguments
+### Other optional arguments and attributes
+Another attribute of `OSMM.f_torch` is `W_validate`, which is a scalar, a numpy array, or a numpy matrix in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy. Default is `None`.
+
 Other optinal arguments for the `solve` method are as follows.
-* `W_validate` is a scalar, a numpy array, or a numpy matrix in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy. Default is `None`.
 * `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. Default is `20`.
 *  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. Default is `20`.
 * `max_iter` is the maximum number of iterations. Default is `200`.
