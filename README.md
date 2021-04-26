@@ -1,7 +1,7 @@
 # osmm
 `osmm` is a Python package for oracle-structured minimization method, which solves problems in the following form
 
-<img src="https://github.com/cvxgrp/osmm/blob/main/readme_figs/eqn1.png" width="200"/>
+<img src="https://github.com/cvxgrp/osmm/blob/main/readme_figs/eqn1.png" width="20%"/>
 
 where `x` is the variable, and `W` contains data and parameters that specify `f`. 
 The oracle function `f( ,W)` is convex in `x`, defined by PyTorch, and can be automatically differentiated by PyTorch. 
@@ -59,7 +59,7 @@ The `solve` method has one required argument, which gives an initial value of `x
 ### Examples
 **1. Basic example.** We take the following Kelly gambling problem as one example
 
-<img src="https://github.com/cvxgrp/osmm/blob/main/readme_figs/eqn2.png" width="250"/>
+<img src="https://github.com/cvxgrp/osmm/blob/main/readme_figs/eqn2.png" width="25%"/>
 
 where `x` is an `n` dimensional variable, and `w_i` for `i=1, ..., N` are given data.
 The objective function is `f`, the indicator function of the constraints is `g`, and the data matrix `W = [w_1, ..., w_N]`.
