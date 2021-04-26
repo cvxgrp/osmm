@@ -29,10 +29,7 @@ sigma = 1.0 / np.sqrt(2)
 NFACT = 5
 factors_stock = np.random.randn(m, NFACT)
 Sigma = (factors_stock.dot(factors_stock.T) / NFACT + np.eye(m)) * (sigma ** 2)
-# Sigma = np.eye(m) * (sigma ** 2)
-# mu = (0.01 - (np.diag(Sigma)) / 2)
 mu = 0.03 * np.sqrt(np.diag(Sigma)) - np.diag(Sigma) / 2
-# mu[0:m // 2] = mu[0:m // 2] * (-1)
 
 call_strike_prices = np.exp(norm.ppf(0.8) * np.sqrt(np.diag(Sigma)) + mu)
 put_strike_prices = np.exp(norm.ppf(0.2) * np.sqrt(np.diag(Sigma)) + mu)
@@ -76,11 +73,11 @@ def my_g_cvxpy():
     return b_var, g, constr
 
 
-def my_f_torch(r_torch=None, b_torch=None):
+def my_f_torch(b_torch=None, W_torch=None):
     if b_torch.shape == torch.Size([n]):
-        tmp = torch.matmul(r_torch.T, b_torch[1:n])
+        tmp = torch.matmul(W_torch.T, b_torch[1:n])
     else:
-        tmp = torch.sum(r_torch * b_torch[1:n, :], axis=0)
+        tmp = torch.sum(W_torch * b_torch[1:n, :], axis=0)
     objf = 1.0 / (1.0 - eta) * torch.mean(torch.relu(-tmp + b_torch[0])) - b_torch[0]
     return objf
 
