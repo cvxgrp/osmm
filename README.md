@@ -3,8 +3,9 @@
 $$
 \mathrm{minimize} \quad f(x, W) + g(x),
 $$
-where $x$ is the variable, and $W$ contains data and parameters that specify `f`. 
-The oracle function $f( ,W)$ is convex in `x`, defined by PyTorch, and can be automatically differentiated by PyTorch. 
+![](https://github.com/cvxgrp/osmm/blob/main/svgs/eqn_1.png?raw=true)
+where `x` is the variable, and `W` contains data and parameters that specify `f`. 
+The oracle function `f( ,W)` is convex in `x`, defined by PyTorch, and can be automatically differentiated by PyTorch. 
 The structured function `g` is convex, defined by CVXPY, and can contain constraints and variables additional to `x`.
 
 Variable `x` can be a scalar, a vector, or a matrix.
