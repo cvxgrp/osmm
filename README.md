@@ -99,8 +99,11 @@ init_val = np.ones(n) / n
 # Define an OSMM object.
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
 
+# Pass in the data.
+osmm_prob.f_torch.W = W
+
 # Call the solve method, and the optimal objective value is returned by it.
-opt_obj_val = osmm_prob.solve(init_val, W)
+opt_obj_val = osmm_prob.solve(init_val)
 
 # A solution for x is stored in x_var.value.
 print("x solution = ", x_var.value)
@@ -148,7 +151,9 @@ def my_f_torch(A_torch, W_torch):
     return -ave_revenue
     
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
-result = osmm_prob.solve(init_val, W)
+osmm_prob.f_torch.W = W
+
+result = osmm_prob.solve(init_val)
 ```
 
 **3. Additional variables in g.** `osmm` accepts variables additional to `x` in `g`. Take the following simplified power flow problem as an example
@@ -205,7 +210,9 @@ def my_f_torch(x_torch, W_torch):
     return torch.mean(torch.sum(torch.relu(-d_torch.T - s_torch.T - x_torch), axis=1))
 
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
-result = osmm_prob.solve(init_val, W)
+osmm_prob.f_torch.W = W
+
+result = osmm_prob.solve(init_val)
 ```
 
 For more examples, see the [`examples`](examples/) directory.
@@ -224,9 +231,10 @@ np.random.seed(0)
 
 N = 100
 W_small = np.random.uniform(low=0.5, high=1.5, size=(n, N))
+osmm_prob.f_torch.W = W_small
 
 t1 = time.time()
-opt_obj_val = osmm_prob.solve(init_val, W_small)
+opt_obj_val = osmm_prob.solve(init_val)
 print("N = 100, osmm time cost = %.2f, opt value = %.4f" % (time.time() - t1, opt_obj_val))
 # N = 100, osmm time cost = 0.19, opt value = -0.0557
 
@@ -238,9 +246,10 @@ print("N = 100, cvxpy time cost = %.2f, opt value = %.4f" % (time.time() - t2, o
 
 N = 30000
 W_large = np.random.uniform(low=0.5, high=1.5, size=(n, N))
+osmm_prob.f_torch.W = W_large
 
 t3 = time.time()
-opt_obj_val = osmm_prob.solve(init_val, W_large)
+opt_obj_val = osmm_prob.solve(init_val)
 print("N = 30,000, osmm time cost = %.2f, opt value = %.5f" % (time.time() - t3, opt_obj_val))
 # N = 30,000, osmm time cost = 1.12, opt value = -0.00074
 
