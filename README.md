@@ -124,7 +124,7 @@ and the data matrix *W = [(d_1, p_1), ..., (d_N, p_N)]*.
 
 ```python
 import torch
-import autograd.numpy as np
+import numpy as np
 import cvxpy as cp
 from osmm import OSMM
 
@@ -171,7 +171,7 @@ The data matrix *W = [(s_1, d_1), ..., (s_N, d_N)]*.
 
 ```python
 import torch
-import autograd.numpy as np
+import numpy as np
 import cvxpy as cp
 from osmm import OSMM
 
