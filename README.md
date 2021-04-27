@@ -261,7 +261,7 @@ print("N = 30,000, cvxpy time cost = %.2f, opt value = %.5f" % (time.time() - t4
 ## Optional arguments and attributes
 Another attribute of `OSMM.f_torch` is `W_validate`, which is a scalar, a numpy array, or a numpy matrix in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives *f(x, W_validate)*, which is then compared with *f(x, W)* to validate the sampling accuracy. Default is `None`.
 
-Other optinal arguments for the `solve` method are as follows.
+Optinal arguments for the `solve` method are as follows.
 * `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. Default is `20`.
 *  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. Default is `20`.
 * `max_iter` is the maximum number of iterations. Default is `200`.
@@ -297,3 +297,13 @@ More detailed results are stored in the dictonary `method_results`, which is an 
   * `"time_detail_iters"` stores the time costs of computing the value of *f* once, the gradient of *f* once, the tentative update, and the lower bound versus iterations.
 
 ## Citing
+To cite our work, please use the following BibTex entry.
+
+```
+@article{oracle_struc_composite,
+  author  = {Shen, Xinyue and Ali, Alnur and Boyd, Stephen},
+  title   = {Minimizing Oracle-Structured Composite Functions},
+  journal = {arXiv},
+  year    = {2021},
+}
+```
