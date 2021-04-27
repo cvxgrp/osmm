@@ -16,16 +16,16 @@ The implementation is based on our paper [*Minimizing Oracle-Structured Composit
 The current version is preliminary, and it will be stabilized in May 2021.
 
 ## Installation
+`osmm` requires
+* [cvxpy](https://github.com/cvxgrp/cvxpy) >= 1.1.0a4
+* [PyTorch](https://pytorch.org/) >= 1.6.0
+* Python 3.x
+
 To install `osmm`, first clone the repo, and then from inside the directory run 
 ```python3
 python setup.py install
 ```
 It may require root access, and if so, please use `sudo`.
-
-`osmm` requires
-* [cvxpy](https://github.com/cvxgrp/cvxpy) >= 1.1.0a4
-* [PyTorch](https://pytorch.org/) >= 1.6.0
-* Python 3.x
 
 ## Usage
 `osmm` exposes the `OSMM` class 
