@@ -28,7 +28,7 @@ python setup.py install
 It may require root access, and if so, please use `sudo`.
 
 ## Usage
-**Construct an object.** `osmm` exposes the `OSMM` class 
+**Construct object.** `osmm` exposes the `OSMM` class 
 ```python3
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
 ```
