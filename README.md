@@ -38,7 +38,7 @@ osmm_prob.f_torch.W = W
 ```
 Then the solve function can be called by
 ```python3
-osmm_prob.solve(init_val)
+result = osmm_prob.solve(init_val)
 ```
 which runs the solve method with initial value `init_val`, and returns the optimal objective value.
 
