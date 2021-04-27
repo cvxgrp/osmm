@@ -3,13 +3,13 @@
 
 <img src="https://github.com/cvxgrp/osmm/blob/main/readme_figs/eqn1.png" width="20%"/>
 
-where `x` is the variable, and `W` contains data and parameters that specify `f`. 
-The oracle function `f( ,W)` is convex in `x`, defined by PyTorch, and can be automatically differentiated by PyTorch. 
-The structured function `g` is convex, defined by CVXPY, and can contain constraints and variables additional to `x`.
+where *x* is the variable, and *W* contains data and parameters that specify *f*. 
+The oracle function *f( ,W)* is convex in *x*, defined by PyTorch, and can be automatically differentiated by PyTorch. 
+The structured function *g* is convex, defined by CVXPY, and can contain constraints and variables additional to *x*.
 
 The variable can be a scalar, a vector, or a matrix. It does not have to be named as `x` in the code.
 
-`osmm` is suitable for cases where `W` contains a large data matrix, as will be shown in an example later when we introduce the efficiency.
+`osmm` is suitable for cases where *W* contains a large data matrix, as will be shown in an example later when we introduce the efficiency.
 
 The implementation is based on our paper [*Minimizing Oracle-Structured Composite Functions*](https://web.stanford.edu/~boyd/papers/oracle_struc_composite.html)
 
@@ -28,47 +28,42 @@ python setup.py install
 It may require root access, and if so, please use `sudo`.
 
 ## Usage
-`osmm` exposes the `OSMM` class 
+**Construct an object.** `osmm` exposes the `OSMM` class 
 ```python3
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
 ```
-which creates an object defining the form of the problem. A data matrix `W` specifying the problem can be passed in by setting
+which creates an object defining the form of the problem. The object construction method has two required arguments.
+* The first argument defines *f*, and it must be a function with one required input, one optional input, and one output.
+    * The first input (required) is a PyTorch tensor for variable *x*. 
+    * The second input (optional) is a PyTorch tensor for *W* and must be named `W_torch`. It is only needed when there is a data matrix in the problem.
+    * The output is a PyTorch tensor for the scalar function value of *f*.
+* The second argument defines *g*, and it must be a function with no input and three outputs. 
+    * The first output is a CVXPY variable for *x*. 
+    * The second output is a CVXPY expression for the objective function in *g*. 
+    * The third output is a list of constraints contained in *g*.
+
+**Pass in data.**
+An `OSMM` object has an attribute `f_torch`, which is set at construction by the defined *f*. It has an attribution `W` which is a scalar, a numpy array, or a numpy matrix. A data matrix specifying the problem can be passed in by setting
 ```python3
 osmm_prob.f_torch.W = W
 ```
+
+**Solve.**
 Then the solve function can be called by
 ```python3
 result = osmm_prob.solve(init_val)
 ```
-which runs the solve method with initial value `init_val`, and returns the optimal objective value.
-
-
-### Arguments and attributes
-The construction method of the `OSMM` class has two required arguments, which define the form of the problem.
-* The first one defines `f`, and it must be a function with one required input, one optional input, and one output.
-    * The first input (required) is a PyTorch tensor for `x`. 
-    * The second input (optional) is a PyTorch tensor for `W` and must be named `W_torch`. It is only needed when there is a data matrix in the problem.
-    * The output is a PyTorch tensor for the scalar function value of `f`.
-* The second one defines `g`, and it must be a function with no input and three outputs. 
-    * The first output is a CVXPY variable for `x`. 
-    * The second output is a CVXPY expression for the objective function in `g`. 
-    * The third output is a list of constraints contained in `g`.
-
-The `OSMM` class has an attribute `f_torch`, which is set at construction by the defined `f`. It has an attribution `W` which is a scalar, a numpy array, or a numpy matrix.
-
-
-The `solve` method has one required argument, which gives an initial value of `x`, and several optional arguments.
-* `init_val` (required) must be a scalar, a numpy array, or a numpy matrix that is in the same shape as `x`, and it must be in the domain of `f`.
-* More optional arguments will be introduced later.
-
+The `solve` method has one required argument, which gives an initial value of *x*. It must be a scalar, a numpy array, or a numpy matrix that is in the same shape as *x*, and it must be in the domain of *f*.
+The `solve` method returns the optimal objective value.
+A solution for each variable is stored in the `value` attribution of the corresponding CVXPY variable used to define *g*.
 
 ### Examples
 **1. Basic example.** We take the following Kelly gambling problem as one example
 
 <img src="https://github.com/cvxgrp/osmm/blob/main/readme_figs/eqn2.png" width="25%"/>
 
-where `x` is an `n` dimensional variable, and `w_i` for `i=1, ..., N` are given data.
-The objective function is `f`, the indicator function of the constraints is `g`, and the data matrix `W = [w_1, ..., w_N]`.
+where *x* is an *n* dimensional variable, and *w_i* for *i=1, ..., N* are given data.
+The objective function is *f*, the indicator function of the constraints is *g*, and the data matrix *W = [w_1, ..., w_N]*.
 The code is as follows.
 ```python
 import torch
