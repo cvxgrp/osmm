@@ -11,16 +11,16 @@ The variable can be a scalar, a vector, or a matrix. It does not have to be name
 
 `osmm` is suitable for cases where `W` contains a large data matrix, as will be shown in an example later when we introduce the efficiency.
 
-The implementation is based on our paper Minimizing Oracle-Structured Composite Functions [XXX add link].
+The implementation is based on our paper [*Minimizing Oracle-Structured Composite Functions*](https://web.stanford.edu/~boyd/papers/oracle_struc_composite.html)
 
-The current version is preliminary, and will be changing.
+The current version is preliminary, and it will be stabilized in May 2021.
 
 ## Installation
 To install `osmm`, first clone the repo, and then from inside the directory run 
-```
+```python3
 python setup.py install
 ```
-This may require root access.
+It may require root access, and if so, please use `sudo`.
 
 `osmm` requires
 * [cvxpy](https://github.com/cvxgrp/cvxpy) >= 1.1.0a4
