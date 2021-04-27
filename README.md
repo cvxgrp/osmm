@@ -57,7 +57,7 @@ The `solve` method has one required argument, which gives an initial value of *x
 The `solve` method returns the optimal objective value.
 A solution for each variable is stored in the `value` attribution of the corresponding CVXPY variable used to define *g*.
 
-### Examples
+## Examples
 **1. Basic example.** We take the following Kelly gambling problem as one example
 
 <img src="https://github.com/cvxgrp/osmm/blob/main/readme_figs/eqn2.png" width="25%"/>
@@ -215,7 +215,7 @@ result = osmm_prob.solve(init_val)
 
 For more examples, see the [`examples`](examples/) directory.
 
-### Efficiency
+## Efficiency
 `osmm` is efficient when *W* contains a large data matrix, and can be more efficient if PyTorch uses a GPU to compute *f* and its gradient.
 
 We take the Kelly gambling problem as an example again. 
@@ -258,7 +258,7 @@ print("N = 30,000, cvxpy time cost = %.2f, opt value = %.5f" % (time.time() - t4
 # N = 30,000, cvxpy time cost = 39.02, opt value = -0.00074
 ```
 
-### Other optional arguments and attributes
+## Optional arguments and attributes
 Another attribute of `OSMM.f_torch` is `W_validate`, which is a scalar, a numpy array, or a numpy matrix in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives *f(x, W_validate)*, which is then compared with *f(x, W)* to validate the sampling accuracy. Default is `None`.
 
 Other optinal arguments for the `solve` method are as follows.
@@ -274,7 +274,7 @@ Other optinal arguments for the `solve` method are as follows.
     * `eps_gap_abs` and `eps_gap_rel` are absolute and relative tolerances on the gap between upper and lower bounds on the optimal objective, respectively. Default values are `1e-4` and `1e-3`, respectively.
     * `eps_res_abs` and `eps_res_rel` are absolute and relative tolerances on a residue for an optimality condition, respectively. Default values are `1e-4` and `1e-3`, respectively.
 
-### Return values
+## Return values
 The optimal objective is returned by the `solve` method.
 A solution for *x* and the other variables in *g* can be obtained in the `value` attribute of the corresponding CVXPY variables.
 
