@@ -149,7 +149,7 @@ def my_f_torch(A_torch, W_torch):
     retail_node_amount = torch.matmul(A_torch, s_torch)
     ave_revenue = torch.sum(p_torch * torch.min(d_torch, retail_node_amount[:, None])) / N
     return -ave_revenue
-    
+
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
 osmm_prob.f_torch.W = W
 
