@@ -103,7 +103,7 @@ osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
 osmm_prob.f_torch.W = W
 
 # Call the solve method, and the optimal objective value is returned by it.
-opt_obj_val = osmm_prob.solve(init_val)
+opt_obj_val = osmm_prob.solve(init_val, verbose=True)
 
 # A solution for x is stored in x_var.value.
 print("x solution = ", x_var.value)
