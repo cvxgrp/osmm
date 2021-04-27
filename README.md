@@ -19,13 +19,15 @@ The current version is preliminary, and it will be stabilized in May 2021.
 `osmm` requires
 * [cvxpy](https://github.com/cvxgrp/cvxpy) >= 1.1.0a4
 * [PyTorch](https://pytorch.org/) >= 1.6.0
-* Python 3.x
+* Python >= 3.7
 
 To install `osmm`, first clone the repo, and then from inside the directory run 
 ```python3
 python setup.py install
 ```
 It may require root access, and if so, please use `sudo`.
+CVXPY will be automatically installed by it (if not installed already),
+but PyTorch won't and will need to be additionally installed.
 
 ## Usage
 **Construct object.** `osmm` exposes the `OSMM` class 
