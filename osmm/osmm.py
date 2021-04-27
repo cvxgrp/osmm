@@ -6,11 +6,12 @@ import time
 
 from .osmm_update import OsmmUpdate
 from .alg_mode import AlgMode
-
+from .f_torch import FTorch
 
 class OSMM:
     def __init__(self, f_torch, g_cvxpy):
-        self.f_torch = f_torch
+        # self.f_torch = f_torch
+        self.f_torch = FTorch(f_torch)
         self.f_hess = self.f_hess_value
         self.x_var_cvxpy, self.g_objf, self.g_constrs = g_cvxpy()
 
@@ -41,7 +42,7 @@ class OSMM:
 
     def _f(self, x):
         x_torch = torch.tensor(x, dtype=torch.float, requires_grad=True)
-        f_torch = self.f_torch(x_torch, self.W_torch)
+        f_torch = self.f_torch.eval_func(x_torch, self.W_torch)
         return f_torch, x_torch
 
     def f_value(self, x):
@@ -49,7 +50,7 @@ class OSMM:
 
     def f_validate_value(self, x):
         x_torch = torch.tensor(x, dtype=torch.float, requires_grad=True)
-        f_torch = self.f_torch(x_torch, self.W_torch_validate)
+        f_torch = self.f_torch.eval_func(x_torch, self.W_torch_validate)
         return float(f_torch)
 
     def f_grad_value(self, x):
@@ -59,7 +60,7 @@ class OSMM:
 
     def f_hess_value(self, x):
         x_torch = torch.tensor(x, dtype=torch.float, requires_grad=True)
-        my_f_partial = partial(self.f_torch, W_torch=self.W_torch)
+        my_f_partial = partial(self.f_torch.eval_func, W_torch=self.W_torch)
         result_torch = torch.autograd.functional.hessian(my_f_partial, x_torch)
         return np.array(result_torch.cpu())
 
@@ -93,7 +94,7 @@ class OSMM:
         # print("Hutchinson #iters", it, "rel. incr.", np.abs(new_est_tr - est_tr) / np.abs(est_tr), "est. tr.", est_tr)
         return est_tr
 
-    def solve(self, init_val, W=None, W_validate=None, max_iter=200, hessian_rank=20, gradient_memory=20, solver="ECOS",
+    def solve(self, init_val, max_iter=200, hessian_rank=20, gradient_memory=20, solver="ECOS",
               eps_gap_abs=1e-4, eps_gap_rel=1e-3, eps_res_abs=1e-4, eps_res_rel=1e-3, check_gap_frequency=10,
               store_var_all_iters=True, verbose=False, use_termination_criteria=True, use_cvxpy_param=False,
               use_Hutchinson_init=True, tau_min=1e-3, mu_min=1e-4, mu_max=1e5, mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8,
@@ -112,10 +113,10 @@ class OSMM:
             del self.W_torch
         if self.W_torch_validate is not None:
             del self.W_torch_validate
-        if W is not None:
-            self.W_torch = torch.tensor(W, dtype=torch.float, requires_grad=False)
-        if W_validate is not None:
-            self.W_torch_validate = torch.tensor(W_validate, dtype=torch.float, requires_grad=False)
+        if self.f_torch.W is not None:
+            self.W_torch = torch.tensor(self.f_torch.W, dtype=torch.float, requires_grad=False)
+        if self.f_torch.W_validate is not None:
+            self.W_torch_validate = torch.tensor(self.f_torch.W_validate, dtype=torch.float, requires_grad=False)
 
         self.store_var_all_iters = store_var_all_iters
         if self.store_var_all_iters:
