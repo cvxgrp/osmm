@@ -112,13 +112,13 @@ print("x solution = ", x_var.value)
 
 <img src="https://github.com/cvxgrp/osmm/blob/main/readme_figs/eqn3.png" width="35%"/>
 
-where `A` is an `m` by `d` variable.
-The `d` dimensional vector `s`, the positive scalar `t`, 
-and the `m` dimensional vectors `p_i` and `d_i` are given. 
+where *A* is an *m* by *d* variable.
+The *d* dimensional vector *s*, the positive scalar *t*, 
+and the *m* dimensional vectors *p_i* and *d_i* are given. 
 The l1 norm notation is the sum of absolute values of all entires.
-The first term in the objective function is `f`,
-the regularization term plus the indicator function of the constraints is `g`,
-and the data matrix `W = [(d_1, p_1), ..., (d_N, p_N)]`. 
+The first term in the objective function is *f*,
+the regularization term plus the indicator function of the constraints is *g*,
+and the data matrix *W = [(d_1, p_1), ..., (d_N, p_N)]*. 
 
 ```python
 import torch
@@ -154,18 +154,18 @@ osmm_prob.f_torch.W = W
 result = osmm_prob.solve(init_val)
 ```
 
-**3. Additional variables in g.** `osmm` accepts variables additional to `x` in `g`. Take the following simplified power flow problem as an example
+**3. Additional variables in g.** `osmm` accepts variables additional to *x* in *g*. Take the following simplified power flow problem as an example
 
 
 <img src="https://github.com/cvxgrp/osmm/blob/main/readme_figs/eqn4.png" width="45%"/>
 
-where `x` is an `n` dimensional variable, and `u` is an `m` dimensional variable.
-The graph incidence matrix `A`, the `n` dimensional vectors `d_i` and `s_i`,
-and the positive scalars `u_max` and `x_max` are given.
-The objective function corresponds to `f`.
-Minimization of the indicator function of the constraints over `u` gives `g`,
-so `u` is an additional variable in `g`.
-The data matrix `W = [(s_1, d_1), ..., (s_N, d_N)]`. 
+where *x* is an *n* dimensional variable, and *u* is an *m* dimensional variable.
+The graph incidence matrix *A*, the *n* dimensional vectors *d_i* and *s_i*,
+and the positive scalars *u_max* and *x_max* are given.
+The objective function corresponds to *f*.
+Minimization of the indicator function of the constraints over *u* gives *g*,
+so *u* is an additional variable in *g*.
+The data matrix *W = [(s_1, d_1), ..., (s_N, d_N)]*. 
 
 ```python
 import torch
@@ -216,12 +216,12 @@ result = osmm_prob.solve(init_val)
 For more examples, see the [`examples`](examples/) directory.
 
 ### Efficiency
-`osmm` is efficient when `W` contains a large data matrix, and can be more efficient if PyTorch uses a GPU to compute `f` and its gradient.
+`osmm` is efficient when *W* contains a large data matrix, and can be more efficient if PyTorch uses a GPU to compute *f* and its gradient.
 
 We take the Kelly gambling problem as an example again. 
 The variable `x_var`, the functions `my_f_torch` and `my_g_cvxpy`, and `init_val` have been defined in the above.
-We compare the time cost of `osmm` with CVXPY on a CPU, and show that `osmm` is not as efficient as CVXPY when the data matrix is small with `N=100`,
-but is more efficient when the data matrix is large with `N=30,000`.
+We compare the time cost of `osmm` with CVXPY on a CPU, and show that `osmm` is not as efficient as CVXPY when the data matrix is small with *N=100*,
+but is more efficient when the data matrix is large with *N=30,000*.
 
 ```python
 import time as time
@@ -259,7 +259,7 @@ print("N = 30,000, cvxpy time cost = %.2f, opt value = %.5f" % (time.time() - t4
 ```
 
 ### Other optional arguments and attributes
-Another attribute of `OSMM.f_torch` is `W_validate`, which is a scalar, a numpy array, or a numpy matrix in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives `f(x, W_validate)`, which is then compared with `f(x, W)` to validate the sampling accuracy. Default is `None`.
+Another attribute of `OSMM.f_torch` is `W_validate`, which is a scalar, a numpy array, or a numpy matrix in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives *f(x, W_validate)*, which is then compared with *f(x, W)* to validate the sampling accuracy. Default is `None`.
 
 Other optinal arguments for the `solve` method are as follows.
 * `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. Default is `20`.
@@ -269,14 +269,14 @@ Other optinal arguments for the `solve` method are as follows.
 * `solver` must be one of the solvers supported by CVXPY. Default value is `'ECOS'`.
 * `verbose` is a boolean giving the choice of printing information during the iterations. Default value is `False`.
 * `use_cvxpy_param` is a boolean giving the choice of using CVXPY parameters. Default value is `False`.
-* `store_var_all_iters` is a boolean giving the choice of whether the updates of `x` in all iterations are stored. Default value is `True`.
+* `store_var_all_iters` is a boolean giving the choice of whether the updates of *x* in all iterations are stored. Default value is `True`.
 * The following tolerances are used in the stopping criteria.
     * `eps_gap_abs` and `eps_gap_rel` are absolute and relative tolerances on the gap between upper and lower bounds on the optimal objective, respectively. Default values are `1e-4` and `1e-3`, respectively.
     * `eps_res_abs` and `eps_res_rel` are absolute and relative tolerances on a residue for an optimality condition, respectively. Default values are `1e-4` and `1e-3`, respectively.
 
 ### Return values
 The optimal objective is returned by the `solve` method.
-A solution for `x` and the other variables in `g` can be obtained in the `value` attribute of the corresponding CVXPY variables.
+A solution for *x* and the other variables in *g* can be obtained in the `value` attribute of the corresponding CVXPY variables.
 
 More detailed results are stored in the dictonary `method_results`, which is an attribute of an `OSMM` object. The keys are as follows.
 * `"objf_iters"` stores the objective value versus iterations.
@@ -284,16 +284,16 @@ More detailed results are stored in the dictonary `method_results`, which is an 
 * `"total_iters"` stores the actual number of iterations taken.
 * `"objf_validate_iters"` stores the validate objective value versus iterations, when `W_validate` is provided.
 * More detailed histories during the iterations are as follows.
-  * `"var_iters"` stores the update of `x` versus iterations. It can be turned off by setting the argument `store_var_all_iters=False`.
+  * `"var_iters"` stores the update of *x* versus iterations. It can be turned off by setting the argument `store_var_all_iters=False`.
   * `"time_iters"` stores the time cost per iteration versus iterations.
   * `"rms_res_iters"` stores the RMS value of optimality residue versus iterations.
-  * `"f_grad_norm_iters"` stores the norm of the gradient of `f` versus iterations.
-  * `"q_norm_iters"` stores the norm of `q` versus iterations.
-  * `"v_norm_iters"` stores the norm of `v` versus iterations.
+  * `"f_grad_norm_iters"` stores the norm of the gradient of *f* versus iterations.
+  * `"q_norm_iters"` stores the norm of *q* versus iterations.
+  * `"v_norm_iters"` stores the norm of *v* versus iterations.
   * `"lam_iters"` stores the value of the penalty parameter versus iterations.
-  * `"mu_iters"` stores the value of `mu` versus iterations.
-  * `"t_iters"` stores the value of `t` versus iterations.
-  * `"num_f_evals_iters"` stores the number of `f` evaluations per iteration versus iterations.
-  * `"time_detail_iters"` stores the time costs of computing the value of `f` once, the gradient of `f` once, the tentative update, and the lower bound versus iterations.
+  * `"mu_iters"` stores the value of *mu* versus iterations.
+  * `"t_iters"` stores the value of *t* versus iterations.
+  * `"num_f_evals_iters"` stores the number of *f* evaluations per iteration versus iterations.
+  * `"time_detail_iters"` stores the time costs of computing the value of *f* once, the gradient of *f* once, the tentative update, and the lower bound versus iterations.
 
 ## Citing
