@@ -19,13 +19,15 @@ The current version is preliminary, and it will be stabilized in May 2021.
 `osmm` requires
 * [cvxpy](https://github.com/cvxgrp/cvxpy) >= 1.1.0a4
 * [PyTorch](https://pytorch.org/) >= 1.6.0
-* Python 3.x
+* Python >= 3.7
 
 To install `osmm`, first clone the repo, and then from inside the directory run 
 ```python3
 python setup.py install
 ```
 It may require root access, and if so, please use `sudo`.
+CVXPY will be automatically installed by it (if not installed already),
+but PyTorch won't and will need to be additionally installed.
 
 ## Usage
 **Construct object.** `osmm` exposes the `OSMM` class 
@@ -101,7 +103,7 @@ osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
 osmm_prob.f_torch.W = W
 
 # Call the solve method, and the optimal objective value is returned by it.
-opt_obj_val = osmm_prob.solve(init_val)
+opt_obj_val = osmm_prob.solve(init_val, verbose=True)
 
 # A solution for x is stored in x_var.value.
 print("x solution = ", x_var.value)
@@ -122,7 +124,7 @@ and the data matrix *W = [(d_1, p_1), ..., (d_N, p_N)]*.
 
 ```python
 import torch
-import autograd.numpy as np
+import numpy as np
 import cvxpy as cp
 from osmm import OSMM
 
@@ -147,7 +149,7 @@ def my_f_torch(A_torch, W_torch):
     retail_node_amount = torch.matmul(A_torch, s_torch)
     ave_revenue = torch.sum(p_torch * torch.min(d_torch, retail_node_amount[:, None])) / N
     return -ave_revenue
-    
+
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
 osmm_prob.f_torch.W = W
 
@@ -169,7 +171,7 @@ The data matrix *W = [(s_1, d_1), ..., (s_N, d_N)]*.
 
 ```python
 import torch
-import autograd.numpy as np
+import numpy as np
 import cvxpy as cp
 from osmm import OSMM
 
@@ -261,7 +263,7 @@ print("N = 30,000, cvxpy time cost = %.2f, opt value = %.5f" % (time.time() - t4
 ## Optional arguments and attributes
 Another attribute of `OSMM.f_torch` is `W_validate`, which is a scalar, a numpy array, or a numpy matrix in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives *f(x, W_validate)*, which is then compared with *f(x, W)* to validate the sampling accuracy. Default is `None`.
 
-Other optinal arguments for the `solve` method are as follows.
+Optinal arguments for the `solve` method are as follows.
 * `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. Default is `20`.
 *  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. Default is `20`.
 * `max_iter` is the maximum number of iterations. Default is `200`.
@@ -297,3 +299,13 @@ More detailed results are stored in the dictonary `method_results`, which is an 
   * `"time_detail_iters"` stores the time costs of computing the value of *f* once, the gradient of *f* once, the tentative update, and the lower bound versus iterations.
 
 ## Citing
+To cite our work, please use the following BibTex entry.
+
+```
+@article{oracle_struc_composite,
+  author  = {Shen, Xinyue and Ali, Alnur and Boyd, Stephen},
+  title   = {Minimizing Oracle-Structured Composite Functions},
+  journal = {arXiv},
+  year    = {2021},
+}
+```
