@@ -215,7 +215,7 @@ osmm_prob.f_torch.W = W
 result = osmm_prob.solve(init_val)
 ```
 
-For more examples, see the [`examples`](examples/) directory.
+For more examples, see the notebooks in the [`examples`](examples/) directory.
 
 ## Efficiency
 `osmm` is efficient when *W* contains a large data matrix, and can be more efficient if PyTorch uses a GPU to compute *f* and its gradient.
