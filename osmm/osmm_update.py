@@ -115,7 +115,8 @@ class OsmmUpdate:
         phi_line_search = f_tmp + g_k_plus_half
         t = 1.0
         j = 0
-        while j < self.j_max and phi_line_search > objf_k - 0.5 * self.alpha * t * desc:
+        while j < self.j_max and \
+                (f_tmp is None or np.isnan(f_tmp) or phi_line_search > objf_k - 0.5 * self.alpha * t * desc):
             t = t * self.beta
             f_tmp = self.osmm_problem.f_value(t * x_k_plus_half + (1 - t) * xk)
             phi_line_search = f_tmp + t * g_k_plus_half + (1 - t) * g_k
