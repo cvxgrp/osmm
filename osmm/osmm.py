@@ -71,20 +71,21 @@ class OSMM:
             f_torch, x_torch = self._f(x)
             f_torch.backward(create_graph=True)
             grad_x = x_torch.grad
+            grad_x_tmp = np.array(x_torch.grad.detach().cpu().numpy())
             grad_x.requires_grad_(True)
             if self.n1 == 0:
                 v = (np.random.rand(self.n) < 0.5) * 2 - 1.0
                 v_torch = torch.tensor(v, dtype=torch.float, requires_grad=False)
                 gv_objf = torch.matmul(v_torch.T, grad_x)
                 gv_objf.backward()
-                Hv = x_torch.grad.detach().cpu().numpy()
+                Hv = x_torch.grad.detach().cpu().numpy() - grad_x_tmp
                 vTHv = float(v.T.dot(Hv))
             else:
                 v = (np.random.rand(self.n0, self.n1) < 0.5) * 2 - 1.0
                 v_torch = torch.tensor(v, dtype=torch.float, requires_grad=False)
                 gv_objf = torch.sum(v_torch * grad_x)
                 gv_objf.backward()
-                Hv = x_torch.grad.detach().cpu().numpy()
+                Hv = x_torch.grad.detach().cpu().numpy() - grad_x_tmp
                 vTHv = float(np.sum(v * Hv))
             new_est_tr = (est_tr * it + float(vTHv)) / (it + 1)
             if np.abs(new_est_tr - est_tr) < tol * np.abs(est_tr):
