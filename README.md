@@ -237,16 +237,13 @@ def my_F_scalar_torch(y_scalar_torch):
 osmm_prob.f_torch.F_scalar = my_F_scalar_torch
 ```
 
-Then when calling the solve method, to use the exact Hessian, run
-```python3
-from osmm import AlgMode
-osmm_prob.solve(init_val, alg_mode = AlgMode.ExactHessian)
-```
-To use low-rank plus diagonal approximated Hessian with rank `r`, run
+Then when calling the solve method, to use low-rank plus diagonal approximated Hessian with rank `r`, run
 ```python3
 from osmm import AlgMode
 osmm_prob.solve(init_val, alg_mode = AlgMode.LowRankDiagHessian, hessian_rank=r)
 ```
+To use exact Hessian, simply set `hessian_rank=n` in the above.
+
 
 ## Efficiency
 `osmm` is efficient when *W* contains a large data matrix, and can be more efficient if PyTorch uses a GPU to compute *f* and its gradient.
