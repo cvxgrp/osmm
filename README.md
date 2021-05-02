@@ -227,7 +227,7 @@ when the objecitve function *f* has the following form
 f(x, W) = \sum_{i=1}^N F(w_i^T x),
 ```
 where *F* is a convex scalar function, and has second-order derivative which is not everywhere zero.
-If is expected to be efficient, when the dimension of *x* is not very large, e.g., no more than a thousand.
+It is expected to be efficient, when the dimension of *x* is not very large, e.g., no more than a thousand.
 
 To use the exact or a low-rank plus diagonal approximated Hessian, a PyTorch description of *F* is needed. For example
 ```python3
@@ -240,12 +240,12 @@ osmm_prob.f_torch.F_scalar = my_F_scalar_torch
 Then when calling the solve method, to use the exact Hessian, run
 ```python3
 from osmm import AlgMode
-osmm_prob.solve(init_val, alg_mode = AlgMode.ExactHessian
+osmm_prob.solve(init_val, alg_mode = AlgMode.ExactHessian)
 ```
-To use low-rank plus diagonal approximated Hessian, run
+To use low-rank plus diagonal approximated Hessian with rank `r`, run
 ```python3
 from osmm import AlgMode
-osmm_prob.solve(init_val, alg_mode = AlgMode.LowRankDiagHessian, hessian_rank=20)
+osmm_prob.solve(init_val, alg_mode = AlgMode.LowRankDiagHessian, hessian_rank=r)
 ```
 
 ## Efficiency
