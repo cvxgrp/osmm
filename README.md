@@ -30,35 +30,61 @@ CVXPY will be automatically installed by it (if not installed already),
 but PyTorch won't and will need to be additionally installed.
 
 ## Usage
-**Construct object.** Create an object of the `OSMM` class to define the form of the problem
+**Construct object.** Create an object of the `OSMM` class. An example is as follows.
 ```python3
 from osmm import OSMM
-osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
+osmm_prob = OSMM()
 ```
-The object construction method has two required arguments.
-* The first argument defines *f*, and it must be a function with one required input, one optional input, and one output.
+
+**Define f by PyTorch.** An `OSMM` object has an attribute `f_torch`, which has the following attributes that define *f*.
+* `f_torch.function` must be a function with one required input, one optional input, and one output.
     * The first input (required) is a PyTorch tensor for variable *x*. 
     * The second input (optional) is a PyTorch tensor for *W* and must be named `W_torch`. It is only needed when there is a data matrix in the problem.
     * The output is a PyTorch tensor for the scalar function value of *f*.
-* The second argument defines *g*, and it must be a function with no input and three outputs. 
-    * The first output is a CVXPY variable for *x*. 
-    * The second output is a CVXPY expression for the objective function in *g*. 
-    * The third output is a list of constraints contained in *g*.
+* `f_torch.W` is a scalar, a numpy array, or a numpy matrix for *W*.
 
-**Pass in data.**
-An `OSMM` object has an attribute `f_torch`, which is set at construction by the defined *f*. It has an attribution `W` which is a scalar, a numpy array, or a numpy matrix. A data matrix specifying the problem can be passed in by setting
+To explain the above, let us continue with the example.
 ```python3
-osmm_prob.f_torch.W = W
+import torch
+# Define f by torch.
+def my_f_torch(x_torch, W_torch):
+    objf = -torch.mean(torch.log(torch.matmul(W_torch.T, x_torch)))
+    return objf
+    
+# Generate the data matrix.
+import numpy as np
+n = 100
+N = 10000
+my_W = np.random.uniform(low=0.5, high=1.5, size=(n, N))
+
+osmm_prob.f_torch.function = my_f_torch
+osmm_prob.f_torch.W = my_W
 ```
 
-**Solve.**
-Then the solve function can be called by
+**Define g by CVXPY.** An `OSMM` object has an attribute `g_cvxpy`, which has the following attributes that define *g*.
+* `g_cvxpy.variable` is a CVXPY variable for *x*. 
+* `g_cvxpy_objective` is a CVXPY expression for the objective function in *g*. 
+* `g_cvxpy_constraints` is a list of constraints contained in *g*.
+
 ```python3
+import cvxpy as cp
+# Define a CVXPY variable for x.
+my_var = cp.Variable(n, nonneg=True)
+my_g_obj = 0
+my_g_constr = [cp.sum(my_var) == 1]
+
+osmm_prob.g_cvxpy.variable = my_var
+osmm_prob.g_cvxpy.objective = my_g_obj
+osmm_prob.g_cvxpy.constraints = my_g_constr
+```
+
+**Solve.** An object of the `OSMM` class has a `solve` method. The `solve` method has one required argument, which gives an initial value of *x*. It must be a scalar, a numpy array, or a numpy matrix that is in the same shape as *x*, and it must be in the domain of *f*. The `solve` method returns the optimal objective value. A solution for each variable is stored in the `value` attribution of the corresponding CVXPY variable.
+
+```python3
+init_val = np.ones(n)
 result = osmm_prob.solve(init_val)
+my_soln = my_var.value
 ```
-The `solve` method has one required argument, which gives an initial value of *x*. It must be a scalar, a numpy array, or a numpy matrix that is in the same shape as *x*, and it must be in the domain of *f*.
-The `solve` method returns the optimal objective value.
-A solution for each variable is stored in the `value` attribution of the corresponding CVXPY variable used to define *g*.
 
 ## Examples
 **1. Basic example.** We take the following Kelly gambling problem as one example
