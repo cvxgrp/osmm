@@ -66,7 +66,6 @@ osmm_prob.f_torch.W = my_W
 * `g_cvxpy.variable` is a CVXPY variable for *x*. 
 * `g_cvxpy.objective` is a CVXPY expression for the objective function in *g*. 
 * `g_cvxpy.constraints` is a list of constraints contained in *g*.
-
 ```python3
 import cvxpy as cp
 my_var = cp.Variable(n, nonneg=True)
@@ -80,7 +79,6 @@ osmm_prob.g_cvxpy.constraints = my_g_constr
 ```
 
 **Solve.** An `OSMM` object has a `solve` method. The `solve` method has one required argument, which gives an initial value of *x*. It must be a scalar, a numpy array, or a numpy matrix that is in the same shape as *x*, and it must be in the domain of *f*. The `solve` method returns the optimal objective value. A solution is stored in the `value` attribution of the corresponding CVXPY variable.
-
 ```python3
 init_val = np.ones(n)
 result = osmm_prob.solve(init_val)
@@ -88,7 +86,7 @@ my_soln = my_var.value
 ```
 
 ## Solve methods
-**Default method.** The default is a low-rank quasi-Newton bundle method which only uses first-order information of *f*, as in our [paper](https://web.stanford.edu/~boyd/papers/oracle_struc_composite.html).
+**Default method.** The default is a low-rank quasi-Newton bundle method which works for the general problem introduced at the beginning.
 
 **Other methods.** 
 The `osmm` package also supports usage of a low-rank plus diagonal approximated Hessian that is based on eigenvalue decomposition of the exact Hessian,
@@ -148,10 +146,6 @@ s = np.random.uniform(low=1.0, high=5.0, size=(d))
 W = np.exp(np.random.randn(2 * m, N))
 t = 1
 
-A_var = cp.Variable((m, d), nonneg=True)
-g_obj = t * cp.sum(cp.abs(A_var))
-g_constr = [cp.sum(A_var, axis=0) <= np.ones(d)]
-
 def my_f_torch(A_torch, W_torch):
     d_torch = W_torch[0:m, :]
     p_torch = W_torch[m:2 * m, :]
@@ -160,15 +154,16 @@ def my_f_torch(A_torch, W_torch):
     ave_revenue = torch.sum(p_torch * torch.min(d_torch, retail_node_amount[:, None])) / N
     return -ave_revenue
 
+A_var = cp.Variable((m, d), nonneg=True)
+
 osmm_prob = OSMM()
 osmm_prob.f_torch.function = my_f_torch
 osmm_prob.f_torch.W = W
 osmm_prob.g_cvxpy.variable = A_var
-osmm_prob.g_cvxpy.objective = g_obj
-osmm_prob.g_cvxpy.constraints = g_constr
+osmm_prob.g_cvxpy.objective = t * cp.sum(cp.abs(A_var))
+osmm_prob.g_cvxpy.constraints = [cp.sum(A_var, axis=0) <= np.ones(d)]
 
-init_val = np.ones((m, d))
-result = osmm_prob.solve(init_val)
+result = osmm_prob.solve(np.ones((m, d)))
 ```
 
 **3. Additional variables in g.** `osmm` accepts variables additional to *x* in *g*. Take the following simplified power flow problem as an example
