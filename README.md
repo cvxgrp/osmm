@@ -87,55 +87,39 @@ result = osmm_prob.solve(init_val)
 my_soln = my_var.value
 ```
 
+## Solve methods
+**Default method.** 
+The default method is a low-rank quasi-Newton bundle method which only takes first-order information of *f*, as in our [paper](https://web.stanford.edu/~boyd/papers/oracle_struc_composite.html).
+
+**Other methods.** 
+The `osmm` package also supports usage of a low-rank plus diagonal approximated Hessian that is based on eigenvalue decomposition of the exact Hessian,
+when the objecitve function *f* has the following form
+```
+f(x, W) = \sum_{i=1}^N F_i(w_i^T x),
+```
+where *F_i* is a convex scalar function, and has second-order derivative which is not everywhere zero.
+Computation is expected to be efficient, when the dimension of *x* is not very large, e.g., no more than a thousand.
+To use this approximation, a PyTorch description of the elementwise mapping *F=(F_1,...,F_N)* from *R^N* to *R^N* is needed.
+```python3
+def my_elementwise_mapping_torch(y_scalar_torch):
+    return -torch.log(y_scalar_torch) / N
+    
+osmm_prob.f_torch.elementwise_mapping = my_elementwise_mapping_torch
+```
+Then when calling the solve method, to use low-rank plus diagonal approximated Hessian with rank `r`, run
+```python3
+from osmm import AlgMode
+osmm_prob.solve(init_val, alg_mode=AlgMode.LowRankDiagHessian, hessian_rank=r)
+```
+To use exact Hessian, simply set `hessian_rank=n` in the above.
+
 ## Examples
-**1. Basic example.** We take the following Kelly gambling problem as one example
+**1. Basic example.** We have shown example code step by step in the above for a Kelly gambling problem
 
 <img src="https://github.com/cvxgrp/osmm/blob/main/readme_figs/eqn2.png" width="25%"/>
 
 where *x* is an *n* dimensional variable, and *w_i* for *i=1, ..., N* are given data.
-The objective function is *f*, the indicator function of the constraints is *g*, and the data matrix *W = [w_1, ..., w_N]*.
-The code is as follows.
-```python
-import torch
-import numpy as np
-import cvxpy as cp
-from osmm import OSMM
-
-n = 100
-N = 10000
-
-# Define a CVXPY variable for x.
-x_var = cp.Variable(n, nonneg=True)
-
-# Define f by torch.
-def my_f_torch(x_torch, W_torch):
-    objf = -torch.mean(torch.log(torch.matmul(W_torch.T, x_torch)))
-    return objf
-
-# Define g by CVXPY.
-def my_g_cvxpy():
-    g = 0
-    constr = [cp.sum(x_var) == 1]
-    return x_var, g, constr
-
-# Generate the data matrix.
-W = np.random.uniform(low=0.5, high=1.5, size=(n, N))
-
-# Generate an initial value for x.
-init_val = np.ones(n) / n
-
-# Define an OSMM object.
-osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
-
-# Pass in the data.
-osmm_prob.f_torch.W = W
-
-# Call the solve method, and the optimal objective value is returned by it.
-opt_obj_val = osmm_prob.solve(init_val, verbose=True)
-
-# A solution for x is stored in x_var.value.
-print("x solution = ", x_var.value)
-```
+The objective function has been treated as *f*, the indicator function of the constraints has been treated as *g*, and the data matrix *W = [w_1, ..., w_N]*.
 
 **2. Matrix variable.** `osmm` accepts matrix variables. Take the following allocation problem as an example
 
@@ -162,13 +146,10 @@ N = 10000
 s = np.random.uniform(low=1.0, high=5.0, size=(d))
 W = np.exp(np.random.randn(2 * m, N))
 t = 1
-A_var = cp.Variable((m, d), nonneg=True)
-init_val = np.ones((m, d))
 
-def my_g_cvxpy():
-    g = t * cp.sum(cp.abs(A_var))
-    constr = [cp.sum(A_var, axis=0) <= np.ones(d)]
-    return A_var, g, constr
+A_var = cp.Variable((m, d), nonneg=True)
+g_obj = t * cp.sum(cp.abs(A_var))
+g_constr = [cp.sum(A_var, axis=0) <= np.ones(d)]
 
 def my_f_torch(A_torch, W_torch):
     d_torch = W_torch[0:m, :]
@@ -178,9 +159,14 @@ def my_f_torch(A_torch, W_torch):
     ave_revenue = torch.sum(p_torch * torch.min(d_torch, retail_node_amount[:, None])) / N
     return -ave_revenue
 
-osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
+osmm_prob = OSMM()
+osmm_prob.f_torch.function = my_f_torch
 osmm_prob.f_torch.W = W
+osmm_prob.g_cvxpy.variable = A_var
+osmm_prob.g_cvxpy.objective = g_obj
+osmm_prob.g_cvxpy.constraints = g_constr
 
+init_val = np.ones((m, d))
 result = osmm_prob.solve(init_val)
 ```
 
@@ -224,54 +210,25 @@ W[0:n, :] = np.exp(np.random.multivariate_normal(np.ones(n), np.eye(n), size=N))
 W[n:2 * n, :] = -np.exp(np.random.multivariate_normal(np.zeros(n), np.eye(n), size=N)).T
 
 x_var = cp.Variable(n)
-init_val = np.ones(n)
 u_var = cp.Variable(m)
-
-def my_g_cvxpy():
-    constr = [A @ u_var + x_var == 0, cp.norm(u_var, 'inf') <= u_max, cp.norm(x_var, 'inf') <= x_max]
-    g = 0
-    return x_var, g, constr
+constrs = [A @ u_var + x_var == 0, cp.norm(u_var, 'inf') <= u_max, cp.norm(x_var, 'inf') <= x_max]
 
 def my_f_torch(x_torch, W_torch):
     s_torch = W_torch[0:n, :]
     d_torch = W_torch[n:n * 2, :]
     return torch.mean(torch.sum(torch.relu(-d_torch.T - s_torch.T - x_torch), axis=1))
 
-osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
+osmm_prob = OSMM()
+osmm_prob.f_torch.function = my_f_torch
 osmm_prob.f_torch.W = W
+osmm_prob.g_cvxpy.variable = x_var
+osmm_prob.g_cvxpy.objective = 0
+osmm_prob.g_cvxpy.constraints = constrs
 
-result = osmm_prob.solve(init_val)
+result = osmm_prob.solve(np.ones(n))
 ```
 
 For more examples, see the notebooks in the [`examples`](examples/) directory.
-
-## Solve methods
-The default method is a low-rank quasi-Newton bundle method which is in our [paper](https://web.stanford.edu/~boyd/papers/oracle_struc_composite.html).
-
-The `osmm` package also supports usage of exact Hessian and a low-rank plus diagonal approximated Hessian,
-when the objecitve function *f* has the following form
-```
-f(x, W) = \sum_{i=1}^N F_i(w_i^T x),
-```
-where *F_i* is a convex scalar function, and has second-order derivative which is not everywhere zero.
-It is expected to be efficient, when the dimension of *x* is not very large, e.g., no more than a thousand.
-
-To use the exact or a low-rank plus diagonal approximated Hessian, a PyTorch description of the elementwise mapping *F=(F_1,...,F_N)* from *R^N* to *R^N* is needed. For example
-```python3
-def my_elementwise_mapping_torch(y_scalar_torch):
-    return -torch.log(y_scalar_torch) / N
-    
-osmm_prob.f_torch.elementwise_mapping = my_elementwise_mapping_torch
-```
-
-Then when calling the solve method, to use low-rank plus diagonal approximated Hessian with rank `r`, run
-```python3
-from osmm import AlgMode
-osmm_prob.solve(init_val, alg_mode=AlgMode.LowRankDiagHessian, hessian_rank=r)
-```
-To use exact Hessian, simply set `hessian_rank=n` in the above.
-The Hessian (or its approximation) can be evaluated every `k` iterations by setting the argument `update_curvature_frequency=k` in the solve method.
-
 
 ## Efficiency
 `osmm` is efficient when *W* contains a large data matrix, and can be more efficient if PyTorch uses a GPU to compute *f* and its gradient.
@@ -322,9 +279,10 @@ Another attribute of `OSMM.f_torch` is `W_validate`, which is a scalar, a numpy 
 Optinal arguments for the `solve` method are as follows.
 * `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. Default is `20`.
 *  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. Default is `20`.
-* `alg_mode` either takes the value `AlgMode.LowRankQNBundle`, which is default, or the value `AlgMode.LowRankDiagHessian`, which is applied only if *f* has a specific form as aforementioned. For the latter case, `OSMM.f_torch.elementwise_mapping` must be given, and the number of iterations between when the Hessian is updated can be set by the argument `update_curvature_frequency`.
+* `alg_mode` either takes the value `AlgMode.LowRankQNBundle`, which is default, or the value `AlgMode.LowRankDiagHessian`, which is applied only if *f* has a specific form as aforementioned. For the latter case, `OSMM.f_torch.elementwise_mapping` must be given. 
 * `max_iter` is the maximum number of iterations. Default is `200`.
 * `check_gap_frequency` is the number of iterations between when we check the gap. Default is 10.
+* `update_curvature_frequency` is the number of iterations between when the Hessian is updated. Default is 1.
 * `solver` must be one of the solvers supported by CVXPY. Default value is `'ECOS'`.
 * `verbose` is a boolean giving the choice of printing information during the iterations. Default value is `False`.
 * `use_cvxpy_param` is a boolean giving the choice of using CVXPY parameters. Default value is `False`.
