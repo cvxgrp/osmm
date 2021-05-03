@@ -45,8 +45,8 @@ osmm_prob = OSMM()
 
 To explain the above, let us continue with the example.
 ```python3
-import torch
 # Define f by torch.
+import torch
 def my_f_torch(x_torch, W_torch):
     objf = -torch.mean(torch.log(torch.matmul(W_torch.T, x_torch)))
     return objf
@@ -57,28 +57,29 @@ n = 100
 N = 10000
 my_W = np.random.uniform(low=0.5, high=1.5, size=(n, N))
 
+# Set the attributes.
 osmm_prob.f_torch.function = my_f_torch
 osmm_prob.f_torch.W = my_W
 ```
 
 **Define g by CVXPY.** An `OSMM` object has an attribute `g_cvxpy`, which has the following attributes that define *g*.
 * `g_cvxpy.variable` is a CVXPY variable for *x*. 
-* `g_cvxpy_objective` is a CVXPY expression for the objective function in *g*. 
-* `g_cvxpy_constraints` is a list of constraints contained in *g*.
+* `g_cvxpy.objective` is a CVXPY expression for the objective function in *g*. 
+* `g_cvxpy.constraints` is a list of constraints contained in *g*.
 
 ```python3
 import cvxpy as cp
-# Define a CVXPY variable for x.
 my_var = cp.Variable(n, nonneg=True)
 my_g_obj = 0
 my_g_constr = [cp.sum(my_var) == 1]
 
+# Set the attributes 
 osmm_prob.g_cvxpy.variable = my_var
 osmm_prob.g_cvxpy.objective = my_g_obj
 osmm_prob.g_cvxpy.constraints = my_g_constr
 ```
 
-**Solve.** An object of the `OSMM` class has a `solve` method. The `solve` method has one required argument, which gives an initial value of *x*. It must be a scalar, a numpy array, or a numpy matrix that is in the same shape as *x*, and it must be in the domain of *f*. The `solve` method returns the optimal objective value. A solution for each variable is stored in the `value` attribution of the corresponding CVXPY variable.
+**Solve.** An `OSMM` object has a `solve` method. The `solve` method has one required argument, which gives an initial value of *x*. It must be a scalar, a numpy array, or a numpy matrix that is in the same shape as *x*, and it must be in the domain of *f*. The `solve` method returns the optimal objective value. A solution is stored in the `value` attribution of the corresponding CVXPY variable.
 
 ```python3
 init_val = np.ones(n)
