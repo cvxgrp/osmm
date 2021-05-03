@@ -56,14 +56,14 @@ class CurvatureUpdate:
                 G_k_plus_one[:, self.hessian_rank - 1] = np.zeros(self.osmm_problem.n)
         return G_k_plus_one
 
-    # def low_rank_diag_update(self, x, H_rank):
-    #     if self.osmm_problem.n > 10000:
-    #         print("Fast eigen-decomposition for n >= 10000 not supported.")
-    #     H = self.osmm_problem.f_hess(x)
-    #     u_vec, s_arr, _ = np.linalg.svd(H)
-    #     G_k_plus_one = u_vec[:, 0:H_rank].dot(np.diag(np.sqrt(s_arr[0:H_rank])))
-    #     diag_H = np.maximum(0, np.diag(H - G_k_plus_one.dot(G_k_plus_one.T)))
-    #     return G_k_plus_one, diag_H
+    def low_rank_diag_update(self, x):
+        if self.osmm_problem.n > 10000:
+            print("Fast eigen-decomposition for n >= 10000 not supported.")
+        H = self.osmm_problem.f_hess(x)
+        u_vec, s_arr, _ = np.linalg.svd(H)
+        G_k_plus_one = u_vec[:, 0:self.hessian_rank].dot(np.diag(np.sqrt(s_arr[0:self.hessian_rank])))
+        H_diag_k_plus_one = np.maximum(0, np.diag(H - G_k_plus_one.dot(G_k_plus_one.T)))
+        return G_k_plus_one, H_diag_k_plus_one
     #
     # def low_rank_new_samp_update(self, x, H_rank):
     #     if H_rank == self.osmm_problem.n:
@@ -92,12 +92,12 @@ class CurvatureUpdate:
     #         G_k_plus_one = G_k
     #     return G_k_plus_one
     #
-    # def exact_hess_update(self, x):  # full-rank
-    #     H = self.osmm_problem.f_hess(x)
-    #     u_vec, s_arr, _ = np.linalg.svd(H)
-    #     s_arr = np.sqrt(s_arr)
-    #     G_k_plus_one = u_vec.dot(np.diag(s_arr))
-    #     return G_k_plus_one
+    def exact_hess_update(self, x):  # full-rank
+        H = self.osmm_problem.f_hess(x)
+        u_vec, s_arr, _ = np.linalg.svd(H)
+        s_arr = np.sqrt(s_arr)
+        G_k_plus_one = u_vec.dot(np.diag(s_arr))
+        return G_k_plus_one
     #
     # def trace_hess_update(self, x):
     #     H = self.osmm_problem.f_hess(x)

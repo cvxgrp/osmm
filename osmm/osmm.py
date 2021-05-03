@@ -10,7 +10,6 @@ from .f_torch import FTorch
 
 class OSMM:
     def __init__(self, f_torch, g_cvxpy):
-        # self.f_torch = f_torch
         self.f_torch = FTorch(f_torch)
         self.f_hess = self.f_hess_value
         self.x_var_cvxpy, self.g_objf, self.g_constrs = g_cvxpy()
@@ -59,10 +58,26 @@ class OSMM:
         return np.array(x_torch.grad.cpu())
 
     def f_hess_value(self, x):
-        x_torch = torch.tensor(x, dtype=torch.float, requires_grad=True)
-        my_f_partial = partial(self.f_torch.eval_func, W_torch=self.W_torch)
-        result_torch = torch.autograd.functional.hessian(my_f_partial, x_torch)
-        return np.array(result_torch.cpu())
+        if self.f_torch.elementwise_mapping is None:
+            x_torch = torch.tensor(x, dtype=torch.float, requires_grad=True)
+            my_f_partial = partial(self.f_torch.eval_func, W_torch=self.W_torch)
+            result_torch = torch.autograd.functional.hessian(my_f_partial, x_torch)
+        else:
+            x_torch = torch.tensor(x, dtype=torch.float, requires_grad=False)
+            y_torch = torch.matmul(self.W_torch.T, x_torch)
+            y_torch.requires_grad_(True)
+            f_tmp = torch.sum(self.f_torch.elementwise_mapping(y_torch))
+            f_tmp.backward(create_graph=True)
+            grad_y = y_torch.grad
+            y_grad_tmp = torch.tensor(np.array(y_torch.grad.detach().cpu().numpy()), dtype=torch.float,
+                                      requires_grad=False)
+            grad_y.requires_grad_(True)
+            grad_y_sum = torch.sum(grad_y)
+            grad_y_sum.backward()
+            diag_part = y_torch.grad.detach() - y_grad_tmp
+            tmp = self.W_torch * diag_part
+            result_torch = torch.matmul(tmp, self.W_torch.T)
+        return np.array(result_torch.cpu().numpy())
 
     def f_hess_tr_Hutchinson(self, x, max_iter=100, tol=1e-3):
         est_tr = 0
@@ -97,9 +112,10 @@ class OSMM:
 
     def solve(self, init_val, max_iter=200, hessian_rank=20, gradient_memory=20, solver="ECOS",
               eps_gap_abs=1e-4, eps_gap_rel=1e-3, eps_res_abs=1e-4, eps_res_rel=1e-3, check_gap_frequency=10,
+              update_curvature_frequency=1,
               store_var_all_iters=True, verbose=False, use_termination_criteria=True, use_cvxpy_param=False,
               use_Hutchinson_init=True, tau_min=1e-3, mu_min=1e-4, mu_max=1e5, mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8,
-              alpha=0.05, beta=0.5, j_max=10, ep=1e-15):
+              alpha=0.05, beta=0.5, j_max=10, ep=1e-15, alg_mode=AlgMode.LowRankQNBundle, trust_param_zero=False):
 
         assert hessian_rank >= 0
         assert gradient_memory >= 1
@@ -107,8 +123,9 @@ class OSMM:
         if hessian_rank == 0:
             alg_mode = AlgMode.Bundle
             hessian_rank = 1
-        else:
-            alg_mode = AlgMode.LowRankQNBundle
+
+        if alg_mode == AlgMode.LowRankDiagHessian and hessian_rank == self.n:
+            alg_mode = AlgMode.ExactHessian
 
         if self.W_torch is not None:
             del self.W_torch
@@ -143,14 +160,15 @@ class OSMM:
         self.method_results["t_iters"] = np.zeros(max_iter)
         self.method_results["num_f_evals_iters"] = np.zeros(max_iter)
         self.method_results["time_iters"] = np.zeros(max_iter)
-        self.method_results["time_detail_iters"] = np.zeros((4, max_iter))
+        self.method_results["time_detail_iters"] = np.zeros((5, max_iter))
         self.method_results["total_iters"] = 0
 
         osmm_method = OsmmUpdate(self, hessian_rank, gradient_memory, use_cvxpy_param, solver, tau_min, mu_min, mu_max,
                                  gamma_inc, gamma_dec, alpha, beta, j_max, eps_gap_abs, eps_gap_rel, eps_res_abs,
-                                 eps_res_rel, verbose, alg_mode, check_gap_frequency)
+                                 eps_res_rel, verbose, alg_mode, check_gap_frequency, update_curvature_frequency,
+                                 trust_param_zero)
 
-        objf_k, objf_validate_k, f_k, f_grad_k, g_k, lam_k, f_grads_memory, f_consts_memory, G_k\
+        objf_k, objf_validate_k, f_k, f_grad_k, g_k, lam_k, f_grads_memory, f_consts_memory, G_k, H_diag_k \
             = osmm_method.initialization(init_val, use_Hutchinson_init)
         lower_bound_k = -np.inf
         mu_k = mu_0
@@ -171,10 +189,10 @@ class OSMM:
             iter_start_time = time.time()
 
             stopping_criteria_satisfied, x_k_plus_one, objf_k_plus_one, f_k_plus_one, g_k_plus_one, \
-            lower_bound_k_plus_one, f_grad_k_plus_one, f_grads_memory, f_consts_memory, G_k_plus_one, \
+            lower_bound_k_plus_one, f_grad_k_plus_one, f_grads_memory, f_consts_memory, G_k_plus_one, H_diag_k_plus_one, \
             lam_k_plus_one, mu_k_plus_one \
                 = osmm_method.update_func(iter_idx, objf_k, f_k, g_k, lower_bound_k, f_grad_k,
-                                          f_grads_memory, f_consts_memory, G_k, lam_k, mu_k, ep)
+                                          f_grads_memory, f_consts_memory, G_k, H_diag_k, lam_k, mu_k, ep)
 
             iter_end_time = time.time()
             iter_runtime = iter_end_time - iter_start_time
@@ -186,6 +204,7 @@ class OSMM:
             lower_bound_k = lower_bound_k_plus_one
             f_grad_k = f_grad_k_plus_one
             G_k = G_k_plus_one
+            H_diag_k = H_diag_k_plus_one
             lam_k = lam_k_plus_one
             mu_k = mu_k_plus_one
 

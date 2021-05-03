@@ -3,3 +3,4 @@ class FTorch:
         self.W = None
         self.W_validate = None
         self.eval_func = f_torch
+        self.elementwise_mapping = None

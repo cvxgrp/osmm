@@ -10,7 +10,7 @@ from .alg_mode import AlgMode
 class OsmmUpdate:
     def __init__(self, osmm_problem, hessian_rank, gradient_memory, use_cvxpy_param, solver, tau_min, mu_min, mu_max,
                  gamma_inc, gamma_dec, alpha, beta, j_max, eps_gap_abs, eps_gap_rel, eps_res_abs, eps_res_rel,
-                 verbose, alg_mode, check_gap_frequency):
+                 verbose, alg_mode, check_gap_frequency, update_curvature_frequency, trust_param_zero):
         self.osmm_problem = osmm_problem
         self.curvature_update = CurvatureUpdate(osmm_problem, hessian_rank)
         if use_cvxpy_param:
@@ -36,6 +36,8 @@ class OsmmUpdate:
         self.alpha = alpha
         self.beta = beta
         self.j_max = j_max
+        self.trust_param_zero = trust_param_zero
+        self.update_curvature_frequency = update_curvature_frequency
 
     def initialization(self, x_0, use_Hutchison_init):
         f_0 = self.osmm_problem.f_value(x_0)
@@ -67,11 +69,13 @@ class OsmmUpdate:
         else:
             objf_validate_0 = None
 
-        if use_Hutchison_init:
+        if use_Hutchison_init and (not self.trust_param_zero):
             est_hess_tr = self.osmm_problem.f_hess_tr_Hutchinson(x_0, max_iter=100)
             lam_0 = max(self.tau_min, est_hess_tr / self.osmm_problem.n)
-        else:
+        elif not self.trust_param_zero:
             lam_0 = self.tau_min
+        else:
+            lam_0 = 0
 
         if self.osmm_problem.n1 == 0:
             f_grad_0_vec = f_grad_0
@@ -82,8 +86,15 @@ class OsmmUpdate:
         f_grads_memory = f_grad_0_vec.repeat(self.gradient_memory).reshape((self.osmm_problem.n, self.gradient_memory),
                                                                            order='C')
         f_consts_memory = np.ones(self.gradient_memory) * (f_0 - f_grad_0_vec.T.dot(x_0_vec))
-        G_0 = np.zeros((self.osmm_problem.n, self.hessian_rank))
-        return objf_0, objf_validate_0, f_0, f_grad_0, g_0, lam_0, f_grads_memory, f_consts_memory, G_0
+        if self.alg_mode == AlgMode.ExactHessian:
+            G_0 = self.curvature_update.exact_hess_update(x_0)
+            H_diag_0 = np.zeros(self.osmm_problem.n)
+        elif self.alg_mode == AlgMode.LowRankDiagHessian:
+            G_0, H_diag_0 = self.curvature_update.low_rank_diag_update(x_0)
+        else:
+            G_0 = np.zeros((self.osmm_problem.n, self.hessian_rank))
+            H_diag_0 = np.zeros(self.osmm_problem.n)
+        return objf_0, objf_validate_0, f_0, f_grad_0, g_0, lam_0, f_grads_memory, f_consts_memory, G_0, H_diag_0
 
     def _stopping_criteria(self, objf_k_plus_one, objf_validation_k_plus_one, L_k_plus_one, t_k,
                            rms_res_k_plus_one, q_norm_k_plus_one, f_grad_norm_k_plus_one):
@@ -99,7 +110,7 @@ class OsmmUpdate:
             return True
         return False
 
-    def _line_search(self, x_k_plus_half, xk, v_k_vec, g_k_plus_half, g_k, objf_k, G_k, lam_k, ep=1e-15):
+    def _line_search(self, x_k_plus_half, xk, v_k_vec, g_k_plus_half, g_k, objf_k, G_k, H_diag_k, lam_k, ep=1e-15):
         begin_evaluate_f_time = time.time()
         f_x_k_plus_half = self.osmm_problem.f_value(x_k_plus_half)
         end_evaluate_f_time = time.time()
@@ -110,13 +121,14 @@ class OsmmUpdate:
         #     print("t = 1 because of too small increment")
         #     return x_k_plus_half, f_x_k_plus_half, 1.0, 0, end_evaluate_f_time - begin_evaluate_f_time
 
-        desc = np.square(max(ep, np.linalg.norm(G_k.T.dot(v_k_vec)))) + lam_k * np.square(max(ep, np.linalg.norm(v_k_vec)))
+        desc = np.square(max(ep, np.linalg.norm(G_k.T.dot(v_k_vec)))) + \
+               np.square(max(ep, np.linalg.norm(v_k_vec * np.sqrt(H_diag_k)))) \
+               + lam_k * np.square(max(ep, np.linalg.norm(v_k_vec)))
         f_tmp = f_x_k_plus_half
         phi_line_search = f_tmp + g_k_plus_half
         t = 1.0
         j = 0
-        while j < self.j_max and \
-                (f_tmp is None or np.isnan(f_tmp) or phi_line_search > objf_k - 0.5 * self.alpha * t * desc):
+        while j < self.j_max and (f_tmp is None or np.isnan(f_tmp) or phi_line_search > objf_k - 0.5 * self.alpha * t * desc):
             t = t * self.beta
             f_tmp = self.osmm_problem.f_value(t * x_k_plus_half + (1 - t) * xk)
             phi_line_search = f_tmp + t * g_k_plus_half + (1 - t) * g_k
@@ -127,9 +139,17 @@ class OsmmUpdate:
         if self.alg_mode == AlgMode.LowRankQNBundle:
             G_k_plus_one = self.curvature_update.low_rank_quasi_Newton_update(G_k, x_k_plus_one_vec, xk_vec,
                                                                               f_grad_k_plus_one_vec, f_grad_k_vec)
+            H_diag_k_plus_one = np.zeros(self.osmm_problem.n)
+        elif self.alg_mode == AlgMode.ExactHessian:
+            G_k_plus_one = self.curvature_update.exact_hess_update(x_k_plus_one_vec)  #####TODO: no vectorization
+            H_diag_k_plus_one = np.zeros(self.osmm_problem.n)
+        elif self.alg_mode == AlgMode.LowRankDiagHessian:
+            G_k_plus_one, H_diag_k_plus_one = self.curvature_update.low_rank_diag_update(
+                x_k_plus_one_vec)  # TODO: no vectorization
         else:
             G_k_plus_one = np.zeros((self.osmm_problem.n, self.hessian_rank))
-        return G_k_plus_one
+            H_diag_k_plus_one = np.zeros(self.osmm_problem.n)
+        return G_k_plus_one, H_diag_k_plus_one
 
     def _update_l_k(self, iter_idx, x_k_plus_one_vec, f_k_plus_one, f_grad_k_plus_one_vec, f_grads_memory,
                     f_consts_memory):
@@ -145,15 +165,19 @@ class OsmmUpdate:
         return f_grads_memory, f_consts_memory
 
     def _update_trust_params(self, mu_k, tk, tau_k_plus_one):
-        if tk >= 0.99:
-            mu_k_plus_one = max(mu_k * self.gamma_dec, self.mu_min)
+        if self.trust_param_zero:
+            lam_k_plus_one = 0
+            mu_k_plus_one = 0
         else:
-            mu_k_plus_one = min(mu_k * self.gamma_inc, self.mu_max)
-        lam_k_plus_one = mu_k_plus_one * max(self.tau_min, tau_k_plus_one)
+            if tk >= 0.99:
+                mu_k_plus_one = max(mu_k * self.gamma_dec, self.mu_min)
+            else:
+                mu_k_plus_one = min(mu_k * self.gamma_inc, self.mu_max)
+            lam_k_plus_one = mu_k_plus_one * max(self.tau_min, tau_k_plus_one)
         return lam_k_plus_one, mu_k_plus_one
 
-    def _get_subproblems(self, xk, f_grads_memory, f_consts_memory, lam_k, G_k):
-        if self.subprobs_param is not None:
+    def _get_subproblems(self, xk, f_grads_memory, f_consts_memory, lam_k, G_k, H_diag_k):
+        if self.subprobs_param is not None:  ####TODO: add H_diag
             if self.solver == "OSQP":
                 tentative_update_subp = cp.Problem(cp.Minimize(self.subprobs_param.f_hat_k + self.osmm_problem.g_objf
                                                                + self.subprobs_param.trust_penalty),
@@ -178,20 +202,25 @@ class OsmmUpdate:
             l_k = cp.Variable()
             trust_penalty = 0.5 * cp.sum_squares(self.osmm_problem.x_var_cvxpy * np.sqrt(lam_k) - xk * np.sqrt(lam_k))
             if len(self.osmm_problem.x_var_cvxpy.shape) <= 1:
-                f_curvature = 0.5 * cp.sum_squares(G_k.T @ self.osmm_problem.x_var_cvxpy - G_k.T.dot(xk))
+                f_curvature = 0.5 * cp.sum_squares(G_k.T @ self.osmm_problem.x_var_cvxpy - G_k.T.dot(xk)) \
+                              + 0.5 * cp.sum_squares(cp.multiply(self.osmm_problem.x_var_cvxpy, np.sqrt(H_diag_k))
+                                                     - xk * np.sqrt(H_diag_k))
                 bundle_constr = [f_grads_memory.T @ self.osmm_problem.x_var_cvxpy + f_consts_memory <= l_k]
             else:
                 f_curvature = 0.5 * cp.sum_squares(G_k.T @ cp.vec(self.osmm_problem.x_var_cvxpy)
-                                                   - G_k.T.dot(xk.flatten(order='F')))
+                                                   - G_k.T.dot(xk.flatten(order='F'))) \
+                              + 0.5 * cp.sum_squares(cp.multiply(cp.vec(self.osmm_problem.x_var_cvxpy), np.sqrt(H_diag_k))
+                                                     - xk.flatten(order='F') * np.sqrt(H_diag_k))
                 bundle_constr = [f_grads_memory.T @ cp.vec(self.osmm_problem.x_var_cvxpy) + f_consts_memory <= l_k]
-            tentative_update_subp = cp.Problem(cp.Minimize(l_k + f_curvature + self.osmm_problem.g_objf + trust_penalty),
-                                               self.osmm_problem.g_constrs + bundle_constr)
+            tentative_update_subp = cp.Problem(
+                cp.Minimize(l_k + f_curvature + self.osmm_problem.g_objf + trust_penalty),
+                self.osmm_problem.g_constrs + bundle_constr)
             lower_bound_subp = cp.Problem(cp.Minimize(l_k + self.osmm_problem.g_objf),
                                           self.osmm_problem.g_constrs + bundle_constr)
             g_eval_subp = None
         return tentative_update_subp, lower_bound_subp, g_eval_subp, bundle_constr
 
-    def update_func(self, iter_idx, objf_k, f_k, g_k, lower_bound_k, f_grad_k, f_grads_memory, f_consts_memory, G_k,
+    def update_func(self, iter_idx, objf_k, f_k, g_k, lower_bound_k, f_grad_k, f_grads_memory, f_consts_memory, G_k, H_diag_k,
                     lam_k, mu_k, ep):
         if self.osmm_problem.store_var_all_iters:
             if self.osmm_problem.n1 == 0:
@@ -206,7 +235,7 @@ class OsmmUpdate:
 
         # tentative update
         tentative_update_subp, lower_bound_subp, g_eval_subp, bundle_constr = \
-            self._get_subproblems(xk, f_grads_memory, f_consts_memory, lam_k, G_k)
+            self._get_subproblems(xk, f_grads_memory, f_consts_memory, lam_k, G_k, H_diag_k)
         begin_solve_time = time.time()
         subp_solver_success = True
         try:
@@ -233,7 +262,7 @@ class OsmmUpdate:
         # line search
         if subp_solver_success:
             x_k_plus_one, f_k_plus_one, tk, num_f_evals, f_eval_time_cost \
-                = self._line_search(x_k_plus_half, xk, v_k_vec, g_k_plus_half, g_k, objf_k, G_k, lam_k)
+                = self._line_search(x_k_plus_half, xk, v_k_vec, g_k_plus_half, g_k, objf_k, G_k, H_diag_k, lam_k)
         else:
             x_k_plus_one = xk
             f_k_plus_one = f_k
@@ -301,18 +330,28 @@ class OsmmUpdate:
             rms_res = np.inf
         else:
             if self.gradient_memory == 1:
-                q_k_plus_one_vec = - G_k.dot(G_k.T.dot(v_k_vec)) - lam_k * v_k_vec - f_grads_memory[:, 0]
+                q_k_plus_one_vec = - G_k.dot(G_k.T.dot(v_k_vec)) - H_diag_k * v_k_vec - lam_k * v_k_vec \
+                                   - f_grads_memory[:, 0]
             else:
-                q_k_plus_one_vec = - G_k.dot(G_k.T.dot(v_k_vec)) - lam_k * v_k_vec - f_grads_memory.dot(bundle_dual)
+                q_k_plus_one_vec = - G_k.dot(G_k.T.dot(v_k_vec)) - H_diag_k * v_k_vec - lam_k * v_k_vec \
+                                   - f_grads_memory.dot(bundle_dual)
             rms_res = np.linalg.norm(f_grad_k_plus_one_vec + q_k_plus_one_vec) / np.sqrt(self.osmm_problem.n)
 
         # update l_k
         f_grads_memory, f_consts_memory = self._update_l_k(iter_idx, x_k_plus_one_vec, f_k_plus_one,
                                                            f_grad_k_plus_one_vec, f_grads_memory, f_consts_memory)
 
-        # update G_k
-        G_k_plus_one = self._update_curvature_after_solve(G_k, x_k_plus_one_vec, xk.flatten(order='F'),
-                                                          f_grad_k_plus_one_vec, f_grad_k.flatten(order='F'))
+        # update G_k and H_diag_k
+        begin_curve_time = time.time()
+        if iter_idx % self.update_curvature_frequency == 0:
+            G_k_plus_one, H_diag_k_plus_one = self._update_curvature_after_solve(G_k, x_k_plus_one_vec,
+                                                                                 xk.flatten(order='F'),
+                                                                                 f_grad_k_plus_one_vec,
+                                                                                 f_grad_k.flatten(order='F'))
+        else:
+            G_k_plus_one = G_k
+            H_diag_k_plus_one = H_diag_k
+        end_curve_time = time.time()
 
         # update trust param
         tr_H_k_plus_one = np.square(max(ep, np.linalg.norm(G_k_plus_one, 'fro')))
@@ -358,6 +397,7 @@ class OsmmUpdate:
                                                                              begin_evaluate_f_grad_time
         self.osmm_problem.method_results["time_detail_iters"][2, iter_idx] = end_solve_time - begin_solve_time
         self.osmm_problem.method_results["time_detail_iters"][3, iter_idx] = end_eval_L_k_time - begin_eval_L_k_time
+        self.osmm_problem.method_results["time_detail_iters"][4, iter_idx] = end_curve_time - begin_curve_time
         if self.osmm_problem.store_var_all_iters:
             if self.osmm_problem.n1 == 0:
                 self.osmm_problem.method_results["var_iters"][:, iter_idx] = x_k_plus_one
@@ -383,4 +423,4 @@ class OsmmUpdate:
 
         return stopping_criteria_satisfied, x_k_plus_one, objf_k_plus_one, f_k_plus_one, g_k_plus_one, \
                lower_bound_k_plus_one, f_grad_k_plus_one, f_grads_memory, f_consts_memory, G_k_plus_one, \
-               lam_k_plus_one, mu_k_plus_one
+               H_diag_k_plus_one, lam_k_plus_one, mu_k_plus_one
