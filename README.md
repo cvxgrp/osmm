@@ -88,8 +88,7 @@ my_soln = my_var.value
 ```
 
 ## Solve methods
-**Default method.** 
-The default method is a low-rank quasi-Newton bundle method which only takes first-order information of *f*, as in our [paper](https://web.stanford.edu/~boyd/papers/oracle_struc_composite.html).
+**Default method.** The default is a low-rank quasi-Newton bundle method which only uses first-order information of *f*, as in our [paper](https://web.stanford.edu/~boyd/papers/oracle_struc_composite.html).
 
 **Other methods.** 
 The `osmm` package also supports usage of a low-rank plus diagonal approximated Hessian that is based on eigenvalue decomposition of the exact Hessian,
@@ -103,15 +102,17 @@ To use this approximation, a PyTorch description of the elementwise mapping *F=(
 ```python3
 def my_elementwise_mapping_torch(y_scalar_torch):
     return -torch.log(y_scalar_torch) / N
-    
+```
+It is passed in by setting the `f_torch.elementwise_mapping` attribute.
+```python3
 osmm_prob.f_torch.elementwise_mapping = my_elementwise_mapping_torch
 ```
-Then when calling the solve method, to use low-rank plus diagonal approximated Hessian with rank `r`, run
+Then when calling the solve method, to use the approximation based on eigen-decomposition of the exact Hessian, run
 ```python3
 from osmm import AlgMode
-osmm_prob.solve(init_val, alg_mode=AlgMode.LowRankDiagHessian, hessian_rank=r)
+osmm_prob.solve(init_val, alg_mode=AlgMode.LowRankDiagEigen)
 ```
-To use exact Hessian, simply set `hessian_rank=n` in the above.
+To use exact Hessian, simply set argument `hessian_rank=n` in the above.
 
 ## Examples
 **1. Basic example.** We have shown example code step by step in the above for a Kelly gambling problem
@@ -234,7 +235,6 @@ For more examples, see the notebooks in the [`examples`](examples/) directory.
 `osmm` is efficient when *W* contains a large data matrix, and can be more efficient if PyTorch uses a GPU to compute *f* and its gradient.
 
 We take the Kelly gambling problem as an example again. 
-The variable `x_var`, the functions `my_f_torch` and `my_g_cvxpy`, and `init_val` have been defined in the above.
 We compare the time cost of `osmm` with CVXPY on a CPU, and show that `osmm` is not as efficient as CVXPY when the data matrix is small with *N=100*,
 but is more efficient when the data matrix is large with *N=30,000*.
 
@@ -279,7 +279,7 @@ Another attribute of `OSMM.f_torch` is `W_validate`, which is a scalar, a numpy 
 Optinal arguments for the `solve` method are as follows.
 * `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. Default is `20`.
 *  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. Default is `20`.
-* `alg_mode` either takes the value `AlgMode.LowRankQNBundle`, which is default, or the value `AlgMode.LowRankDiagHessian`, which is applied only if *f* has a specific form as aforementioned. For the latter case, `OSMM.f_torch.elementwise_mapping` must be given. 
+* `alg_mode` either takes the value `AlgMode.LowRankQNBundle`, which is default, or the value `AlgMode.LowRankDiagEigen`, which can be applied only if *f* has a specific form as aforementioned.
 * `max_iter` is the maximum number of iterations. Default is `200`.
 * `check_gap_frequency` is the number of iterations between when we check the gap. Default is 10.
 * `update_curvature_frequency` is the number of iterations between when the Hessian is updated. Default is 1.
