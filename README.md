@@ -30,11 +30,12 @@ CVXPY will be automatically installed by it (if not installed already),
 but PyTorch won't and will need to be additionally installed.
 
 ## Usage
-**Construct object.** `osmm` exposes the `OSMM` class 
+**Construct object.** Create an object of the `OSMM` class to define the form of the problem
 ```python3
+from osmm import OSMM
 osmm_prob = OSMM(my_f_torch, my_g_cvxpy)
 ```
-which creates an object defining the form of the problem. The object construction method has two required arguments.
+The object construction method has two required arguments.
 * The first argument defines *f*, and it must be a function with one required input, one optional input, and one output.
     * The first input (required) is a PyTorch tensor for variable *x*. 
     * The second input (optional) is a PyTorch tensor for *W* and must be named `W_torch`. It is only needed when there is a data matrix in the problem.
@@ -216,6 +217,34 @@ result = osmm_prob.solve(init_val)
 ```
 
 For more examples, see the notebooks in the [`examples`](examples/) directory.
+
+## Solve methods
+The default method is a low-rank quasi-Newton bundle method which is in our [paper](https://web.stanford.edu/~boyd/papers/oracle_struc_composite.html).
+
+The `osmm` package also supports usage of exact Hessian and a low-rank plus diagonal approximated Hessian,
+when the objecitve function *f* has the following form
+```
+f(x, W) = \sum_{i=1}^N F_i(w_i^T x),
+```
+where *F_i* is a convex scalar function, and has second-order derivative which is not everywhere zero.
+It is expected to be efficient, when the dimension of *x* is not very large, e.g., no more than a thousand.
+
+To use the exact or a low-rank plus diagonal approximated Hessian, a PyTorch description of the elementwise mapping *F=(F_1,...,F_N)* from *R^N* to *R^N* is needed. For example
+```python3
+def my_elementwise_mapping_torch(y_scalar_torch):
+    return -torch.log(y_scalar_torch) / N
+    
+osmm_prob.f_torch.elementwise_mapping = my_elementwise_mapping_torch
+```
+
+Then when calling the solve method, to use low-rank plus diagonal approximated Hessian with rank `r`, run
+```python3
+from osmm import AlgMode
+osmm_prob.solve(init_val, alg_mode=AlgMode.LowRankDiagHessian, hessian_rank=r)
+```
+To use exact Hessian, simply set `hessian_rank=n` in the above.
+The Hessian (or its approximation) can be evaluated every `k` iterations by setting the argument `update_curvature_frequency=k` in the solve method.
+
 
 ## Efficiency
 `osmm` is efficient when *W* contains a large data matrix, and can be more efficient if PyTorch uses a GPU to compute *f* and its gradient.
