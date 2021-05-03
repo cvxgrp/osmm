@@ -295,6 +295,7 @@ Another attribute of `OSMM.f_torch` is `W_validate`, which is a scalar, a numpy 
 Optinal arguments for the `solve` method are as follows.
 * `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. Default is `20`.
 *  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. Default is `20`.
+* `alg_mode` either takes the value `AlgMode.LowRankQNBundle`, which is default, or the value `AlgMode.LowRankDiagHessian`, which is applied only if *f* has a specific form as aforementioned. For the latter case, `OSMM.f_torch.elementwise_mapping` must be given, and the number of iterations between when the Hessian is updated can be set by the argument `update_curvature_frequency`.
 * `max_iter` is the maximum number of iterations. Default is `200`.
 * `check_gap_frequency` is the number of iterations between when we check the gap. Default is 10.
 * `solver` must be one of the solvers supported by CVXPY. Default value is `'ECOS'`.
