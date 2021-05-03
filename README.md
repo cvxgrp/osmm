@@ -224,25 +224,26 @@ The default method is a low-rank quasi-Newton bundle method which is in our [pap
 The `osmm` package also supports usage of exact Hessian and a low-rank plus diagonal approximated Hessian,
 when the objecitve function *f* has the following form
 ```
-f(x, W) = \sum_{i=1}^N F(w_i^T x),
+f(x, W) = \sum_{i=1}^N F_i(w_i^T x),
 ```
-where *F* is a convex scalar function, and has second-order derivative which is not everywhere zero.
+where *F_i* is a convex scalar function, and has second-order derivative which is not everywhere zero.
 It is expected to be efficient, when the dimension of *x* is not very large, e.g., no more than a thousand.
 
-To use the exact or a low-rank plus diagonal approximated Hessian, a PyTorch description of *F* is needed. For example
+To use the exact or a low-rank plus diagonal approximated Hessian, a PyTorch description of the elementwise mapping *F=(F_1,...,F_N)* is needed. For example
 ```python3
-def my_F_scalar_torch(y_scalar_torch):
+def my_elementwise_mapping_torch(y_scalar_torch):
     return -torch.log(y_scalar_torch) / N
     
-osmm_prob.f_torch.F_scalar = my_F_scalar_torch
+osmm_prob.f_torch.elementwise_mapping = my_elementwise_mapping_torch
 ```
 
 Then when calling the solve method, to use low-rank plus diagonal approximated Hessian with rank `r`, run
 ```python3
 from osmm import AlgMode
-osmm_prob.solve(init_val, alg_mode = AlgMode.LowRankDiagHessian, hessian_rank=r)
+osmm_prob.solve(init_val, alg_mode=AlgMode.LowRankDiagHessian, hessian_rank=r)
 ```
 To use exact Hessian, simply set `hessian_rank=n` in the above.
+To improve its efficiency, the Hessian (or its approximation) can be evaluated every `k` iterations by setting the argument `update_curvature_frequency=k` in the solve method.
 
 
 ## Efficiency
