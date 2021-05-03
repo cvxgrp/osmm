@@ -2,12 +2,14 @@ import numpy as np
 
 
 class CurvatureUpdate:
-    def __init__(self, osmm_problem, hessian_rank):
-        self.osmm_problem = osmm_problem
+    def __init__(self, f_torch, hessian_rank, n, n0, n1):
+        self.f_torch = f_torch
         self.hessian_rank = hessian_rank
+        self.n = n
+        self.n0 = n0
+        self.n1 = n1
 
-    def low_rank_quasi_Newton_update(self, G_k, xcur, xprev, grad_cur, grad_prev, tol_1=1e-10, tol_2=1e-2,
-                                     ep=1e-15):
+    def low_rank_quasi_Newton_update(self, G_k, xcur, xprev, grad_cur, grad_prev, tol_1=1e-10, tol_2=1e-2, ep=1e-15):
         s = xcur - xprev
         y = grad_cur - grad_prev
         y_abs_too_small_idxes = np.where(np.abs(y) <= ep)[0]
@@ -33,7 +35,7 @@ class CurvatureUpdate:
             tmp[1:r1 + 1, 0] = - w1 / alpha_k
             _, R1_tilde = np.linalg.qr(np.transpose(P.dot(tmp)))
             R1 = P.dot(R1_tilde.T.dot(P))
-            new_G1 = np.concatenate([y.reshape((self.osmm_problem.n, 1)), G1], axis=1).dot(R1)  # n by r1+1
+            new_G1 = np.concatenate([y.reshape((self.n, 1)), G1], axis=1).dot(R1)  # n by r1+1
         else:
             new_G1 = None
         if r1 == self.hessian_rank:
@@ -53,16 +55,19 @@ class CurvatureUpdate:
             else:
                 G_k_plus_one = G_k
                 G_k_plus_one[:, 0:self.hessian_rank - 1] = new_G2
-                G_k_plus_one[:, self.hessian_rank - 1] = np.zeros(self.osmm_problem.n)
+                G_k_plus_one[:, self.hessian_rank - 1] = np.zeros(self.n)
         return G_k_plus_one
 
     def low_rank_diag_update(self, x):
-        if self.osmm_problem.n > 10000:
-            print("Fast eigen-decomposition for n >= 10000 not supported.")
-        H = self.osmm_problem.f_hess(x)
+        if self.n > 10000:
+            print("Fast eigen-decomposition for n >= 10000 not yet supported.")
+        H = self.f_torch.f_hess_value(x)
         u_vec, s_arr, _ = np.linalg.svd(H)
         G_k_plus_one = u_vec[:, 0:self.hessian_rank].dot(np.diag(np.sqrt(s_arr[0:self.hessian_rank])))
-        H_diag_k_plus_one = np.maximum(0, np.diag(H - G_k_plus_one.dot(G_k_plus_one.T)))
+        if self.hessian_rank == self.n:
+            H_diag_k_plus_one = np.zeros(self.n)
+        else:
+            H_diag_k_plus_one = np.maximum(0, np.diag(H - G_k_plus_one.dot(G_k_plus_one.T)))
         return G_k_plus_one, H_diag_k_plus_one
     #
     # def low_rank_new_samp_update(self, x, H_rank):
@@ -92,12 +97,6 @@ class CurvatureUpdate:
     #         G_k_plus_one = G_k
     #     return G_k_plus_one
     #
-    def exact_hess_update(self, x):  # full-rank
-        H = self.osmm_problem.f_hess(x)
-        u_vec, s_arr, _ = np.linalg.svd(H)
-        s_arr = np.sqrt(s_arr)
-        G_k_plus_one = u_vec.dot(np.diag(s_arr))
-        return G_k_plus_one
     #
     # def trace_hess_update(self, x):
     #     H = self.osmm_problem.f_hess(x)
