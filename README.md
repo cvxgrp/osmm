@@ -108,7 +108,7 @@ osmm_prob.f_torch.elementwise_mapping = my_elementwise_mapping_torch
 Then when calling the solve method, to use the approximation based on eigen-decomposition of the exact Hessian, run
 ```python3
 from osmm import AlgMode
-osmm_prob.solve(init_val, alg_mode=AlgMode.LowRankDiagEigen)
+osmm_prob.solve(init_val, alg_mode=AlgMode.LowRankDiagEVD)
 ```
 To use exact Hessian, simply set argument `hessian_rank=n` in the above.
 
@@ -273,8 +273,8 @@ Another attribute of `OSMM.f_torch` is `W_validate`, which is a scalar, a numpy 
 
 Optinal arguments for the `solve` method are as follows.
 * `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. Default is `20`.
-*  `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. Default is `20`.
-* `alg_mode` either takes the value `AlgMode.LowRankQNBundle`, which is default, or the value `AlgMode.LowRankDiagEigen`, which can be applied only if *f* has a specific form as aforementioned.
+* `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. Default is `20`.
+* `alg_mode` either takes the value `AlgMode.LowRankQNBundle`, which is default, or the value `AlgMode.LowRankDiagEVD`, which can be applied only if *f* has a specific form as aforementioned.
 * `max_iter` is the maximum number of iterations. Default is `200`.
 * `check_gap_frequency` is the number of iterations between when we check the gap. Default is 10.
 * `update_curvature_frequency` is the number of iterations between when the Hessian is updated. Default is 1.
