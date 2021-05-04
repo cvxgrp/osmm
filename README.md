@@ -30,7 +30,7 @@ CVXPY will be automatically installed by it (if not installed already),
 but PyTorch won't and will need to be additionally installed.
 
 ## Usage
-**Construct object.** Create an object of the `OSMM` class. An example is as follows.
+**Construct object.** Create an object of the `OSMM` class. For example
 ```python3
 from osmm import OSMM
 osmm_prob = OSMM()
@@ -45,21 +45,18 @@ osmm_prob = OSMM()
 
 To explain the above, let us continue with the example.
 ```python3
-# Define f by torch.
+import numpy as np
 import torch
+n = 100
+N = 10000
+
 def my_f_torch(x_torch, W_torch):
     objf = -torch.mean(torch.log(torch.matmul(W_torch.T, x_torch)))
     return objf
-    
-# Generate the data matrix.
-import numpy as np
-n = 100
-N = 10000
-my_W = np.random.uniform(low=0.5, high=1.5, size=(n, N))
 
 # Set the attributes.
 osmm_prob.f_torch.function = my_f_torch
-osmm_prob.f_torch.W = my_W
+osmm_prob.f_torch.W = np.random.uniform(low=0.5, high=1.5, size=(n, N))
 ```
 
 **Define g by CVXPY.** An `OSMM` object has an attribute `g_cvxpy`, which has the following attributes that define *g*.
@@ -69,12 +66,11 @@ osmm_prob.f_torch.W = my_W
 ```python3
 import cvxpy as cp
 my_var = cp.Variable(n, nonneg=True)
-my_g_obj = 0
 my_g_constr = [cp.sum(my_var) == 1]
 
 # Set the attributes 
 osmm_prob.g_cvxpy.variable = my_var
-osmm_prob.g_cvxpy.objective = my_g_obj
+osmm_prob.g_cvxpy.objective = 0
 osmm_prob.g_cvxpy.constraints = my_g_constr
 ```
 
@@ -95,7 +91,6 @@ when the objecitve function *f* has the following form
 f(x, W) = \sum_{i=1}^N F_i(w_i^T x),
 ```
 where *F_i* is a convex scalar function, and has second-order derivative which is not everywhere zero.
-Computation is expected to be efficient, when the dimension of *x* is not very large, e.g., no more than a thousand.
 To use this approximation, a PyTorch description of the elementwise mapping *F=(F_1,...,F_N)* from *R^N* to *R^N* is needed.
 ```python3
 def my_elementwise_mapping_torch(y_scalar_torch):
@@ -112,7 +107,7 @@ osmm_prob.solve(init_val, method="LowRankDiagEVD")
 To use exact Hessian, simply set argument `hessian_rank=n` in the above.
 
 ## Examples
-**1. Basic example.** We have shown example code step by step in the above for a Kelly gambling problem
+**1. Basic example.** We have shown the code step by step in the above for a Kelly gambling problem
 
 <img src="https://github.com/cvxgrp/osmm/blob/main/readme_figs/eqn2.png" width="25%"/>
 
@@ -120,7 +115,6 @@ where *x* is an *n* dimensional variable, and *w_i* for *i=1, ..., N* are given 
 The objective function has been treated as *f*, the indicator function of the constraints has been treated as *g*, and the data matrix *W = [w_1, ..., w_N]*.
 
 **2. Matrix variable.** `osmm` accepts matrix variables. Take the following allocation problem as an example
-
 
 <img src="https://github.com/cvxgrp/osmm/blob/main/readme_figs/eqn3.png" width="35%"/>
 
@@ -162,7 +156,7 @@ osmm_prob.g_cvxpy.variable = A_var
 osmm_prob.g_cvxpy.objective = t * cp.sum(cp.abs(A_var))
 osmm_prob.g_cvxpy.constraints = [cp.sum(A_var, axis=0) <= np.ones(d)]
 
-result = osmm_prob.solve(np.ones((m, d)))
+result = osmm_prob.solve(np.ones((m, d)), verbose=True)
 ```
 
 **3. Additional variables in g.** `osmm` accepts variables additional to *x* in *g*. Take the following simplified power flow problem as an example
@@ -220,7 +214,7 @@ osmm_prob.g_cvxpy.variable = x_var
 osmm_prob.g_cvxpy.objective = 0
 osmm_prob.g_cvxpy.constraints = constrs
 
-result = osmm_prob.solve(np.ones(n))
+result = osmm_prob.solve(np.ones(n), verbose=True)
 ```
 
 For more examples, see the notebooks in the [`examples`](examples/) directory.
