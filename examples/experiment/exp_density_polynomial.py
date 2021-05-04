@@ -122,16 +122,10 @@ def generate_random_data():
     return W
 
 
-def get_initial_val():
-    return np.ones(n) / n
-
-
-def my_g_cvxpy():
-    theta_var = cp.Variable(n)
-    g = lam_reg * cp.quad_form(theta_var, D_reg)
-    constr = []
-    return theta_var, g, constr
-
+init_val = np.ones(n) / n
+g_var = cp.Variable(n)
+g_obj = lam_reg * cp.quad_form(g_var, D_reg)
+g_constr = []
 
 def my_f_torch(theta_torch=None, W_torch=None):
     _, batch_size = W_torch.shape

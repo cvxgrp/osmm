@@ -58,17 +58,12 @@ def generate_random_data():
     return learning_sample.T
 
 
-def get_initial_val():
-    return np.ones(n) * 0.001
-
-
-def my_g_cvxpy():
-    q_var = cp.Variable(n, nonneg=True)
-    g = 0
-#     production_cost = cp.square(cp.norm(B.T @ q_var[0:n_product])) + prod_linear.T @ q_var[0:n_product]
-    production_cost = prod_linear.T @ q_var[0:n_product] + prod_linear_2.T @ cp.pos(q_var[0:n_product] - prod_change_pnts)
-    constr = [production_cost <= cost_bound, q_var[0:n - 1] <= prod_amount_bounds, q_var[n - 1] >= 1e-10]
-    return q_var, g, constr
+init_val = np.ones(n) * 0.001
+g_var = cp.Variable(n, nonneg=True)
+g_obj = 0
+# production_cost = cp.square(cp.norm(B.T @ g_var[0:n_product])) + prod_linear.T @ g_var[0:n_product]
+production_cost = prod_linear.T @ g_var[0:n_product] + prod_linear_2.T @ cp.pos(g_var[0:n_product] - prod_change_pnts)
+g_constr = [production_cost <= cost_bound, g_var[0:n - 1] <= prod_amount_bounds, g_var[n - 1] >= 1e-10]
 
 
 def my_f_torch(q_torch=None, W_torch=None):

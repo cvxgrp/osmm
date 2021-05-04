@@ -59,18 +59,11 @@ def generate_random_data():
     return total_return.T
 
 
-def get_initial_val():
-    ini = np.ones(n) / (n - 1)
-    #     ini = np.zeros(n)
-    return ini
-
-
-def my_g_cvxpy():
-    b_var = cp.Variable(n)
-    g = 0
-    constr = [cp.sum(b_var[1:n]) == 1, b_var[1:n] >= -0.1,
-              cp.sum(cp.abs(b_var[1:n])) <= 1.6]#, b_var[m + 1:n] == 0]
-    return b_var, g, constr
+init_val = np.ones(n) / (n - 1)
+g_var = cp.Variable(n)
+g_obj = 0
+g_constr = [cp.sum(g_var[1:n]) == 1, g_var[1:n] >= -0.1,
+              cp.sum(cp.abs(g_var[1:n])) <= 1.6]#, b_var[m + 1:n] == 0]
 
 
 def my_f_torch(b_torch=None, W_torch=None):
