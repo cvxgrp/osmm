@@ -45,8 +45,8 @@ osmm_prob = OSMM()
 
 To explain the above, let us continue with the example.
 ```python3
-import numpy as np
 import torch
+import numpy as np
 n = 100
 N = 10000
 
