@@ -299,7 +299,7 @@ More detailed results are stored in the dictonary `method_results`, which is an 
   * `"mu_iters"` stores the value of *mu* versus iterations.
   * `"t_iters"` stores the value of *t* versus iterations.
   * `"num_f_evals_iters"` stores the number of *f* evaluations per iteration versus iterations.
-  * `"time_detail_iters"` stores the time costs of computing the value of *f* once, the gradient of *f* once, the tentative update, and the lower bound versus iterations.
+  * `"time_detail_iters"` stores the time costs of computing the value of *f* once, the gradient of *f* once, the tentative update, the lower bound, and the curvature versus iterations.
 
 ## Citing
 To cite our work, please use the following BibTex entry.
