@@ -87,9 +87,9 @@ my_soln = my_var.value
 **Other methods.** 
 The `osmm` package also supports usage of a low-rank plus diagonal approximated Hessian that is based on eigenvalue decomposition of the exact Hessian,
 when the objecitve function *f* has the following form
-```
-f(x, W) = \sum_{i=1}^N F_i(w_i^T x),
-```
+
+<img src="https://github.com/cvxgrp/osmm/blob/main/readme_figs/eqn5.png" width="18%"/>
+
 where *F_i* is a convex scalar function, and has second-order derivative which is not everywhere zero.
 To use this approximation, a PyTorch description of the elementwise mapping *F=(F_1,...,F_N)* from *R^N* to *R^N* is needed.
 ```python3
