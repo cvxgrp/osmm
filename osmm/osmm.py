@@ -21,21 +21,24 @@ class OSMM:
 
     def solve(self, init_val, max_iter=200, hessian_rank=20, gradient_memory=20, solver="ECOS",
               eps_gap_abs=1e-4, eps_gap_rel=1e-3, eps_res_abs=1e-4, eps_res_rel=1e-3, check_gap_frequency=10,
-              alg_mode=AlgMode.LowRankQNBundle, update_curvature_frequency=1,
+              method="LowRankQNBundle", update_curvature_frequency=1,
               store_var_all_iters=True, verbose=False, use_termination_criteria=True, use_cvxpy_param=False,
               use_Hutchinson_init=True, tau_min=1e-3, mu_min=1e-4, mu_max=1e5, mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8,
               alpha=0.05, beta=0.5, j_max=10, ep=1e-15, trust_param_zero=False):
 
         assert hessian_rank >= 0
         assert gradient_memory >= 1
+        assert self.f_torch.function is not None
         assert self.g_cvxpy.variable is not None
+        assert method == "LowRankQNBundle" or method == "LowRankDiagEVD"
 
+        if method == "LowRankQNBundle":
+            alg_mode = AlgMode.LowRankQNBundle
+        else:
+            alg_mode = AlgMode.LowRankDiagEVD
         if hessian_rank == 0:
             alg_mode = AlgMode.Bundle
             hessian_rank = 1
-
-        if alg_mode == AlgMode.LowRankDiagHessian and hessian_rank == self.n:
-            alg_mode = AlgMode.ExactHessian
 
         # set variable dimension
         self.n = self.g_cvxpy.variable.size
@@ -124,7 +127,7 @@ class OSMM:
         iter_idx = 1
         stopping_criteria_satisfied = False
         while iter_idx < max_iter and (
-                not use_termination_criteria or iter_idx < 10 or not stopping_criteria_satisfied):
+                not use_termination_criteria or iter_idx <= 10 or not stopping_criteria_satisfied):
             iter_start_time = time.time()
 
             stopping_criteria_satisfied, x_k_plus_one, objf_k_plus_one, f_k_plus_one, g_k_plus_one, \

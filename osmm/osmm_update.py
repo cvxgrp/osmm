@@ -23,7 +23,7 @@ class OsmmUpdate:
                                                 osmm_problem.n1)
         if use_cvxpy_param:
             self.subprobs_param = Subproblem(osmm_problem.g_cvxpy.variable, osmm_problem.g_cvxpy.constraints,
-                                             osmm_problem.g_cvxpy_objfective,
+                                             osmm_problem.g_cvxpy.objective,
                                              hessian_rank=hessian_rank, gradient_memory=gradient_memory)
         else:
             self.subprobs_param = None
@@ -94,7 +94,7 @@ class OsmmUpdate:
             x_0_vec = x_0.flatten(order='F')
         f_grads_memory = f_grad_0_vec.repeat(self.gradient_memory).reshape((self.n, self.gradient_memory), order='C')
         f_consts_memory = np.ones(self.gradient_memory) * (f_0 - f_grad_0_vec.T.dot(x_0_vec))
-        if self.alg_mode == AlgMode.LowRankDiagHessian:
+        if self.alg_mode == AlgMode.LowRankDiagEVD:
             G_0, H_diag_0 = self.curvature_update.low_rank_diag_update(x_0)
         else:
             G_0 = np.zeros((self.n, self.hessian_rank))
@@ -147,7 +147,7 @@ class OsmmUpdate:
             G_k_plus_one = self.curvature_update.low_rank_quasi_Newton_update(G_k, x_k_plus_one_vec, xk_vec,
                                                                               f_grad_k_plus_one_vec, f_grad_k_vec)
             H_diag_k_plus_one = np.zeros(self.n)
-        elif self.alg_mode == AlgMode.LowRankDiagHessian:
+        elif self.alg_mode == AlgMode.LowRankDiagEVD:
             G_k_plus_one, H_diag_k_plus_one = self.curvature_update.low_rank_diag_update(x_k_plus_one)
         else:
             G_k_plus_one = np.zeros((self.n, self.hessian_rank))
@@ -180,7 +180,7 @@ class OsmmUpdate:
         return lam_k_plus_one, mu_k_plus_one
 
     def _get_subproblems(self, xk, f_grads_memory, f_consts_memory, lam_k, G_k, H_diag_k):
-        if self.subprobs_param is not None:  ####TODO: add H_diag
+        if self.subprobs_param is not None:
             if self.solver == "OSQP":
                 tentative_update_subp = cp.Problem(cp.Minimize(self.subprobs_param.f_hat_k + self.g_cvxpy.objective
                                                                + self.subprobs_param.trust_penalty),
@@ -193,13 +193,14 @@ class OsmmUpdate:
                 tentative_update_subp = self.subprobs_param.cvxpy_subp
                 lower_bound_subp = self.subprobs_param.lower_bound_subp
                 g_eval_subp = self.subprobs_param.g_eval_subp
-            self.subprobs_param.x_prev_para.value = xk
             self.subprobs_param.f_grads_iters_para.value = f_grads_memory
             self.subprobs_param.f_const_iters_para.value = f_consts_memory
             self.subprobs_param.sqrt_lam_para.value = np.sqrt(lam_k)
             self.subprobs_param.x_prev_times_sqrt_lam_para.value = xk * np.sqrt(lam_k)
             self.subprobs_param.G_para.value = G_k
             self.subprobs_param.G_T_x_prev_para.value = G_k.T.dot(xk.flatten(order='F'))
+            self.subprobs_param.sqrt_H_diag_para.value = np.sqrt(H_diag_k)
+            self.subprobs_param.sqrt_H_diag_mul_x_prev_para.value = np.sqrt(H_diag_k) * xk.flatten(order='F')
             bundle_constr = self.subprobs_param.bundle_constr
         else:
             l_k = cp.Variable()
@@ -339,10 +340,6 @@ class OsmmUpdate:
                                    - f_grads_memory.dot(bundle_dual)
             rms_res = np.linalg.norm(f_grad_k_plus_one_vec + q_k_plus_one_vec) / np.sqrt(self.n)
 
-        # update l_k
-        f_grads_memory, f_consts_memory = self._update_l_k(iter_idx, x_k_plus_one_vec, f_k_plus_one,
-                                                           f_grad_k_plus_one_vec, f_grads_memory, f_consts_memory)
-
         # update G_k and H_diag_k
         begin_curve_time = time.time()
         if iter_idx % self.update_curvature_frequency == 0:
@@ -384,6 +381,10 @@ class OsmmUpdate:
                     print(print_str.format(iter_idx, objf_k_plus_one, lower_bound_k_plus_one, rms_res,
                                            np.linalg.norm(G_k_plus_one, 'fro')))
         end_eval_L_k_time = time.time()
+
+        # update l_k
+        f_grads_memory, f_consts_memory = self._update_l_k(iter_idx, x_k_plus_one_vec, f_k_plus_one,
+                                                           f_grad_k_plus_one_vec, f_grads_memory, f_consts_memory)
 
         # check stopping criteria
         stopping_criteria_satisfied = self._stopping_criteria(objf_k_plus_one, objf_validation_k_plus_one,

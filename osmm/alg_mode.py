@@ -4,4 +4,4 @@ from enum import Enum
 class AlgMode(Enum):
     Bundle = 0
     LowRankQNBundle = 1
-    LowRankDiagHessian = 2
+    LowRankDiagEVD = 2
