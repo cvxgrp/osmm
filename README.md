@@ -222,7 +222,7 @@ For more examples, see the notebooks in the [`examples`](examples/) directory.
 ## Efficiency
 `osmm` is efficient when *W* contains a large data matrix, and can be more efficient if PyTorch uses a GPU to compute *f* and its gradient.
 
-We take the Kelly gambling problem as an example again. 
+Let us continue with the Kelly gambling example above.
 We compare the time cost of `osmm` with CVXPY on a CPU, and show that `osmm` is not as efficient as CVXPY when the data matrix is small with *N=100*,
 but is more efficient when the data matrix is large with *N=30,000*.
 
@@ -239,7 +239,7 @@ opt_obj_val = osmm_prob.solve(init_val)
 print("N = 100, osmm time cost = %.2f, opt value = %.4f" % (time.time() - t1, opt_obj_val))
 # N = 100, osmm time cost = 0.19, opt value = -0.0557
 
-cvx_prob = cp.Problem(cp.Minimize(-cp.sum(cp.log(W_small.T @ x_var)) / N), [cp.sum(x_var) == 1])
+cvx_prob = cp.Problem(cp.Minimize(-cp.sum(cp.log(W_small.T @ my_var)) / N), [cp.sum(x_var) == 1])
 t2 = time.time()
 opt_obj_val = cvx_prob.solve(solver="ECOS")
 print("N = 100, cvxpy time cost = %.2f, opt value = %.4f" % (time.time() - t2, opt_obj_val))
@@ -254,7 +254,7 @@ opt_obj_val = osmm_prob.solve(init_val)
 print("N = 30,000, osmm time cost = %.2f, opt value = %.5f" % (time.time() - t3, opt_obj_val))
 # N = 30,000, osmm time cost = 1.12, opt value = -0.00074
 
-cvx_prob = cp.Problem(cp.Minimize(-cp.sum(cp.log(W_large.T @ x_var)) / N), [cp.sum(x_var) == 1])
+cvx_prob = cp.Problem(cp.Minimize(-cp.sum(cp.log(W_large.T @ my_var)) / N), [cp.sum(x_var) == 1])
 t4 = time.time()
 opt_obj_val = cvx_prob.solve(solver="ECOS")
 print("N = 30,000, cvxpy time cost = %.2f, opt value = %.5f" % (time.time() - t4, opt_obj_val))
