@@ -121,7 +121,7 @@ The objective function has been treated as *f*, the indicator function of the co
 where *A* is an *m* by *d* variable.
 The *d* dimensional vector *s*, the positive scalar *t*, 
 and the *m* dimensional vectors *p_i* and *d_i* are given. 
-The l1 norm notation is the sum of absolute values of all entires.
+The l1 norm notation is the sum of absolute values of all entries.
 The first term in the objective function is *f*,
 the regularization term plus the indicator function of the constraints is *g*,
 and the data matrix *W = [(d_1, p_1), ..., (d_N, p_N)]*. 
@@ -264,7 +264,7 @@ print("N = 30,000, cvxpy time cost = %.2f, opt value = %.5f" % (time.time() - t4
 ## Optional arguments and attributes
 Another attribute of `OSMM.f_torch` is `W_validate`, which is a scalar, a numpy array, or a numpy matrix in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives *f(x, W_validate)*, which is then compared with *f(x, W)* to validate the sampling accuracy. Default is `None`.
 
-Optinal arguments for the `solve` method are as follows.
+Optional arguments for the `solve` method are as follows.
 * `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. Default is `20`.
 * `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. Default is `20`.
 * `method` either takes `"LowRankQNBundle"`, which is default, or `"LowRankDiagEVD"`, which can be applied only if *f* has a specific form as aforementioned.
@@ -279,11 +279,11 @@ Optinal arguments for the `solve` method are as follows.
     * `eps_gap_abs` and `eps_gap_rel` are absolute and relative tolerances on the gap between upper and lower bounds on the optimal objective, respectively. Default values are `1e-4` and `1e-3`, respectively.
     * `eps_res_abs` and `eps_res_rel` are absolute and relative tolerances on a residue for an optimality condition, respectively. Default values are `1e-4` and `1e-3`, respectively.
 
-## Return values
+## Results
 The optimal objective is returned by the `solve` method.
 A solution for *x* and the other variables in *g* can be obtained in the `value` attribute of the corresponding CVXPY variables.
 
-More detailed results are stored in the dictonary `method_results`, which is an attribute of an `OSMM` object. The keys are as follows.
+More detailed results are stored in the dictionary `method_results`, which is an attribute of an `OSMM` object. The keys of the dictionary are as follows.
 * `"objf_iters"` stores the objective value versus iterations.
 * `"lower_bound_iters"` stores lower bound on the optimal objective value versus iterations.
 * `"total_iters"` stores the actual number of iterations taken.
@@ -299,7 +299,7 @@ More detailed results are stored in the dictonary `method_results`, which is an 
   * `"mu_iters"` stores the value of *mu* versus iterations.
   * `"t_iters"` stores the value of *t* versus iterations.
   * `"num_f_evals_iters"` stores the number of *f* evaluations per iteration versus iterations.
-  * `"time_detail_iters"` stores the time costs of computing the value of *f* once, the gradient of *f* once, the tentative update, the lower bound, and the curvature versus iterations.
+  * `"time_detail_iters"` stores the time costs of computing each of the following once versus iterations, the value of *f*, the gradient of *f*, the tentative update, the lower bound, and the curvature. 
 
 ## Citing
 To cite our work, please use the following BibTex entry.
