@@ -4,8 +4,8 @@ from functools import partial
 
 class FTorch:
     def __init__(self):
-        self.W = None
-        self.W_validate = None
+        # self.W = None
+        # self.W_validate = None
         self.function = None
         self.elementwise_mapping = None
         self.W_torch = None

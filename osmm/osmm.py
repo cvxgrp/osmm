@@ -21,7 +21,7 @@ class OSMM:
 
     def solve(self, init_val, max_iter=200, hessian_rank=20, gradient_memory=20, solver="ECOS",
               eps_gap_abs=1e-4, eps_gap_rel=1e-3, eps_res_abs=1e-4, eps_res_rel=1e-3, check_gap_frequency=10,
-              method="LowRankQNBundle", update_curvature_frequency=1,
+              method="LowRankQNBundle", update_curvature_frequency=1, min_iter=3,
               store_var_all_iters=True, verbose=False, use_termination_criteria=True, use_cvxpy_param=False,
               use_Hutchinson_init=True, tau_min=1e-3, mu_min=1e-4, mu_max=1e5, mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8,
               alpha=0.05, beta=0.5, j_max=10, ep=1e-15, trust_param_zero=False):
@@ -63,15 +63,15 @@ class OSMM:
                     self.g_cvxpy.additional_var_soln[var] = None
 
         # allocate torch memory for data
-        if self.f_torch.W_torch is not None:
-            del self.f_torch.W_torch
-        if self.f_torch.W_validate_torch is not None:
-            del self.f_torch.W_validate_torch
-        if self.f_torch.W is not None:
-            self.f_torch.W_torch = torch.tensor(self.f_torch.W, dtype=torch.float, requires_grad=False)
-        if self.f_torch.W_validate is not None:
-            self.f_torch.W_validate_torch = torch.tensor(self.f_torch.W_validate, dtype=torch.float,
-                                                         requires_grad=False)
+        # if self.f_torch.W_torch is not None:
+        #     del self.f_torch.W_torch
+        # if self.f_torch.W_validate_torch is not None:
+        #     del self.f_torch.W_validate_torch
+        # if self.f_torch.W is not None:
+        #     self.f_torch.W_torch = torch.tensor(self.f_torch.W, dtype=torch.float, requires_grad=False)
+        # if self.f_torch.W_validate is not None:
+        #     self.f_torch.W_validate_torch = torch.tensor(self.f_torch.W_validate, dtype=torch.float,
+        #                                                  requires_grad=False)
 
         # allocate memory for results
         self.store_var_all_iters = store_var_all_iters
@@ -127,7 +127,7 @@ class OSMM:
         iter_idx = 1
         stopping_criteria_satisfied = False
         while iter_idx < max_iter and (
-                not use_termination_criteria or iter_idx <= 10 or not stopping_criteria_satisfied):
+                not use_termination_criteria or iter_idx <= min_iter or not stopping_criteria_satisfied):
             iter_start_time = time.time()
 
             stopping_criteria_satisfied, x_k_plus_one, objf_k_plus_one, f_k_plus_one, g_k_plus_one, \
