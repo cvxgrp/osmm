@@ -13,8 +13,6 @@ The variable can be a scalar, a vector, or a matrix. It does not have to be name
 
 The implementation is based on our paper [*Minimizing Oracle-Structured Composite Functions*](https://web.stanford.edu/~boyd/papers/oracle_struc_composite.html)
 
-The current version is preliminary, and it will be stabilized in May 2021.
-
 ## Installation
 `osmm` requires
 * [cvxpy](https://github.com/cvxgrp/cvxpy) >= 1.1.0a4
