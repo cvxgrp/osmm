@@ -149,7 +149,7 @@ A_var = cp.Variable((m, d), nonneg=True)
 
 osmm_prob = OSMM()
 osmm_prob.f_torch.function = my_f_torch
-osmm_prob.f_torch.W_torch = torch.tensor(W)
+osmm_prob.f_torch.W_torch = torch.tensor(W, dtype=torch.float)
 osmm_prob.g_cvxpy.variable = A_var
 osmm_prob.g_cvxpy.objective = t * cp.sum(cp.abs(A_var))
 osmm_prob.g_cvxpy.constraints = [cp.sum(A_var, axis=0) <= np.ones(d)]
@@ -207,7 +207,7 @@ def my_f_torch(x_torch, W_torch):
 
 osmm_prob = OSMM()
 osmm_prob.f_torch.function = my_f_torch
-osmm_prob.f_torch.W_torch = torch.tensor(W)
+osmm_prob.f_torch.W_torch = torch.tensor(W, dtype=torch.float)
 osmm_prob.g_cvxpy.variable = x_var
 osmm_prob.g_cvxpy.objective = 0
 osmm_prob.g_cvxpy.constraints = constrs
@@ -230,7 +230,7 @@ np.random.seed(0)
 
 N = 100
 W_small = np.random.uniform(low=0.5, high=1.5, size=(n, N))
-osmm_prob.f_torch.W_torch = torch.tensor(W_small, dtype=torch.float, requires_grad=False)
+osmm_prob.f_torch.W_torch = torch.tensor(W_small, dtype=torch.float, requires_grad=False, dtype=torch.float)
 
 t1 = time.time()
 opt_obj_val = osmm_prob.solve(init_val)
