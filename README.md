@@ -39,7 +39,7 @@ osmm_prob = OSMM()
     * The first input (required) is a PyTorch tensor for variable *x*. 
     * The second input (optional) is a PyTorch tensor for *W* and must be named `W_torch`. It is only needed when there is a data matrix in the problem.
     * The output is a PyTorch tensor for the scalar function value of *f*.
-* `f_torch.W_torch` is a PyTorch tensor for *W*.
+* `f_torch.W_torch` is a PyTorch tensor for *W*. The data type for `f_torch.W_torch` should be set as float by `dtype=torch.float`.
 
 To explain the above let us see the following example. Suppose that we have had an `OSMM` object `osmm_prob`.
 ```python3
