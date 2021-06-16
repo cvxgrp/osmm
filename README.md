@@ -54,7 +54,7 @@ def my_f_torch(x_torch, W_torch):
 
 # Set the attributes.
 osmm_prob.f_torch.function = my_f_torch
-osmm_prob.f_torch.W_torch = torch.tensor(np.random.uniform(low=0.5, high=1.5, size=(n, N)), require_grad=False)
+osmm_prob.f_torch.W_torch = torch.tensor(np.random.uniform(low=0.5, high=1.5, size=(n, N)), requires_grad=False, dtype=torch.float)
 ```
 
 **Define g by CVXPY.** An `OSMM` object has an attribute `g_cvxpy`, which has the following attributes that define *g*.
