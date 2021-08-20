@@ -47,6 +47,8 @@ class OsmmUpdate:
         self.j_max = j_max
         self.trust_param_zero = trust_param_zero
         self.update_curvature_frequency = update_curvature_frequency
+        #### revision
+        self.num_active_cuts = 1
 
     def initialization(self, x_0, use_Hutchison_init):
         f_0 = self.f_torch.f_value(x_0)
@@ -155,7 +157,40 @@ class OsmmUpdate:
         return G_k_plus_one, H_diag_k_plus_one
 
     def _update_l_k(self, iter_idx, x_k_plus_one_vec, f_k_plus_one, f_grad_k_plus_one_vec, f_grads_memory,
-                    f_consts_memory):
+                    f_consts_memory,
+                    all_active_cuts, bundle_dual):
+        #### revision
+        print("iter idx =", iter_idx, ", num_active_cuts", self.num_active_cuts)
+        if all_active_cuts and self.num_active_cuts < self.gradient_memory:
+            bundle_dual_revised = list(bundle_dual[0: self.num_active_cuts - 1]) \
+                                  + [bundle_dual[self.num_active_cuts - 1] * (self.gradient_memory - self.num_active_cuts + 1)]
+            bundle_dual_revised = np.array(bundle_dual_revised)
+        elif all_active_cuts:
+            bundle_dual_revised = bundle_dual
+        else:
+            if iter_idx < self.gradient_memory:
+                bundle_dual_revised = list(bundle_dual[0: iter_idx - 1]) + [bundle_dual[iter_idx - 1] * (
+                        self.gradient_memory - iter_idx + 1)]
+                bundle_dual_revised = np.array(bundle_dual_revised)
+            else:
+                bundle_dual_revised = bundle_dual
+        active_cuts_idxs = np.where(bundle_dual_revised >= 1e-5)[0]
+        # active_cuts_idxs_redundant = np.where(bundle_dual >= 1e-5)[0]
+        # active_cuts_idxs = active_cuts_idxs_redundant[np.where(active_cuts_idxs_redundant < self.num_active_cuts)]
+        if all_active_cuts and len(active_cuts_idxs) < self.gradient_memory:
+            f_grads_memory[:, 0: len(active_cuts_idxs)] = f_grads_memory[:, active_cuts_idxs]
+            f_consts_memory[0: len(active_cuts_idxs)] = f_consts_memory[active_cuts_idxs]
+            f_grads_memory[:, len(active_cuts_idxs): self.gradient_memory] = \
+                f_grad_k_plus_one_vec.repeat(self.gradient_memory - len(active_cuts_idxs))\
+                    .reshape((self.n, self.gradient_memory - len(active_cuts_idxs)), order='C')
+            f_consts_memory[len(active_cuts_idxs): self.gradient_memory] = np.ones(self.gradient_memory
+                                                                                   - len(active_cuts_idxs)) * \
+                                                                            (f_k_plus_one - f_grad_k_plus_one_vec.dot(x_k_plus_one_vec))
+            self.num_active_cuts = len(active_cuts_idxs) + 1
+            return f_grads_memory, f_consts_memory
+        if all_active_cuts and len(active_cuts_idxs) >= self.gradient_memory:
+            print("not enough gradient memory to store all active cuts")
+        ####
         if iter_idx < self.gradient_memory:
             num_iters_remain = self.gradient_memory - iter_idx
             f_grads_memory[:, iter_idx: self.gradient_memory] = \
@@ -165,6 +200,7 @@ class OsmmUpdate:
         else:
             f_grads_memory[:, iter_idx % self.gradient_memory] = f_grad_k_plus_one_vec
             f_consts_memory[iter_idx % self.gradient_memory] = f_k_plus_one - f_grad_k_plus_one_vec.dot(x_k_plus_one_vec)
+        self.num_active_cuts = min(len(active_cuts_idxs) + 1, self.gradient_memory)
         return f_grads_memory, f_consts_memory
 
     def _update_trust_params(self, mu_k, tk, tau_k_plus_one):
@@ -224,7 +260,8 @@ class OsmmUpdate:
         return tentative_update_subp, lower_bound_subp, g_eval_subp, bundle_constr
 
     def update_func(self, iter_idx, objf_k, f_k, g_k, lower_bound_k, f_grad_k, f_grads_memory, f_consts_memory, G_k,
-                    H_diag_k, lam_k, mu_k, ep):
+                    H_diag_k, lam_k, mu_k, ep,
+                    all_active_cuts):
         if self.store_var_all_iters:
             if self.n1 == 0:
                 xk = np.array(self.method_results["var_iters"][:, iter_idx - 1])
@@ -384,7 +421,8 @@ class OsmmUpdate:
 
         # update l_k
         f_grads_memory, f_consts_memory = self._update_l_k(iter_idx, x_k_plus_one_vec, f_k_plus_one,
-                                                           f_grad_k_plus_one_vec, f_grads_memory, f_consts_memory)
+                                                           f_grad_k_plus_one_vec, f_grads_memory, f_consts_memory,
+                                                           all_active_cuts, bundle_dual)
 
         # check stopping criteria
         stopping_criteria_satisfied = self._stopping_criteria(objf_k_plus_one, objf_validation_k_plus_one,

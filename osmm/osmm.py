@@ -24,7 +24,8 @@ class OSMM:
               method="LowRankQNBundle", update_curvature_frequency=1, min_iter=3,
               store_var_all_iters=True, verbose=False, use_termination_criteria=True, use_cvxpy_param=False,
               use_Hutchinson_init=True, tau_min=1e-3, mu_min=1e-4, mu_max=1e5, mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8,
-              alpha=0.05, beta=0.5, j_max=10, ep=1e-15, trust_param_zero=False):
+              alpha=0.05, beta=0.5, j_max=10, ep=1e-15, trust_param_zero=False,
+              all_active_cuts=False):
 
         assert hessian_rank >= 0
         assert gradient_memory >= 1
@@ -134,7 +135,7 @@ class OSMM:
             lower_bound_k_plus_one, f_grad_k_plus_one, f_grads_memory, f_consts_memory, G_k_plus_one, \
             H_diag_k_plus_one, lam_k_plus_one, mu_k_plus_one \
                 = osmm_method.update_func(iter_idx, objf_k, f_k, g_k, lower_bound_k, f_grad_k,
-                                          f_grads_memory, f_consts_memory, G_k, H_diag_k, lam_k, mu_k, ep)
+                                          f_grads_memory, f_consts_memory, G_k, H_diag_k, lam_k, mu_k, ep, all_active_cuts)
 
             iter_end_time = time.time()
             iter_runtime = iter_end_time - iter_start_time
