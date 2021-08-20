@@ -13,8 +13,6 @@ The variable can be a scalar, a vector, or a matrix. It does not have to be name
 
 The implementation is based on our paper [*Minimizing Oracle-Structured Composite Functions*](https://web.stanford.edu/~boyd/papers/oracle_struc_composite.html)
 
-The current version is preliminary, and it will be stabilized in May 2021.
-
 ## Installation
 `osmm` requires
 * [cvxpy](https://github.com/cvxgrp/cvxpy) >= 1.1.0a4
@@ -41,9 +39,9 @@ osmm_prob = OSMM()
     * The first input (required) is a PyTorch tensor for variable *x*. 
     * The second input (optional) is a PyTorch tensor for *W* and must be named `W_torch`. It is only needed when there is a data matrix in the problem.
     * The output is a PyTorch tensor for the scalar function value of *f*.
-* `f_torch.W` is a scalar, a numpy array, or a numpy matrix for *W*.
+* `f_torch.W_torch` is a PyTorch tensor for *W*. The data type for `f_torch.W_torch` should be set as float by `dtype=torch.float`.
 
-To explain the above, let us continue with the example.
+To explain the above let us see the following example. Suppose that we have had an `OSMM` object `osmm_prob`.
 ```python3
 import torch
 import numpy as np
@@ -56,7 +54,7 @@ def my_f_torch(x_torch, W_torch):
 
 # Set the attributes.
 osmm_prob.f_torch.function = my_f_torch
-osmm_prob.f_torch.W = np.random.uniform(low=0.5, high=1.5, size=(n, N))
+osmm_prob.f_torch.W_torch = torch.tensor(np.random.uniform(low=0.5, high=1.5, size=(n, N)), requires_grad=False, dtype=torch.float)
 ```
 
 **Define g by CVXPY.** An `OSMM` object has an attribute `g_cvxpy`, which has the following attributes that define *g*.
@@ -151,7 +149,7 @@ A_var = cp.Variable((m, d), nonneg=True)
 
 osmm_prob = OSMM()
 osmm_prob.f_torch.function = my_f_torch
-osmm_prob.f_torch.W = W
+osmm_prob.f_torch.W_torch = torch.tensor(W, dtype=torch.float)
 osmm_prob.g_cvxpy.variable = A_var
 osmm_prob.g_cvxpy.objective = t * cp.sum(cp.abs(A_var))
 osmm_prob.g_cvxpy.constraints = [cp.sum(A_var, axis=0) <= np.ones(d)]
@@ -209,7 +207,7 @@ def my_f_torch(x_torch, W_torch):
 
 osmm_prob = OSMM()
 osmm_prob.f_torch.function = my_f_torch
-osmm_prob.f_torch.W = W
+osmm_prob.f_torch.W_torch = torch.tensor(W, dtype=torch.float)
 osmm_prob.g_cvxpy.variable = x_var
 osmm_prob.g_cvxpy.objective = 0
 osmm_prob.g_cvxpy.constraints = constrs
@@ -232,7 +230,7 @@ np.random.seed(0)
 
 N = 100
 W_small = np.random.uniform(low=0.5, high=1.5, size=(n, N))
-osmm_prob.f_torch.W = W_small
+osmm_prob.f_torch.W_torch = torch.tensor(W_small, dtype=torch.float, requires_grad=False, dtype=torch.float)
 
 t1 = time.time()
 opt_obj_val = osmm_prob.solve(init_val)
@@ -247,7 +245,7 @@ print("N = 100, cvxpy time cost = %.2f, opt value = %.4f" % (time.time() - t2, o
 
 N = 30000
 W_large = np.random.uniform(low=0.5, high=1.5, size=(n, N))
-osmm_prob.f_torch.W = W_large
+osmm_prob.f_torch.W_torch = torch.tensor(W_large, dtype=torch.float, requires_grad=False)
 
 t3 = time.time()
 opt_obj_val = osmm_prob.solve(init_val)
@@ -262,7 +260,7 @@ print("N = 30,000, cvxpy time cost = %.2f, opt value = %.5f" % (time.time() - t4
 ```
 
 ## Optional arguments and attributes
-Another attribute of `OSMM.f_torch` is `W_validate`, which is a scalar, a numpy array, or a numpy matrix in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate` can be used to provide another sampling matrix that gives *f(x, W_validate)*, which is then compared with *f(x, W)* to validate the sampling accuracy. Default is `None`.
+Another attribute of `OSMM.f_torch` is `W_validate_torch`, which is a torch tensor in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate_torch` can be used to provide another sampling matrix that gives *f(x, W_validate)*, which is then compared with *f(x, W)* to validate the sampling accuracy. Default is `None`.
 
 Optional arguments for the `solve` method are as follows.
 * `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. Default is `20`.
