@@ -54,20 +54,8 @@ class OsmmUpdate:
         f_0 = self.f_torch.f_value(x_0)
         f_grad_0 = self.f_torch.f_grad_value(x_0)
 
-        if self.subprobs_param is not None:
-            self.subprobs_param.x_for_g_para.value = x_0
-            g_eval_subp = self.subprobs_param.g_eval_subp
-        else:
-            g_eval_subp = cp.Problem(cp.Minimize(self.g_cvxpy.objective),
-                                     self.g_cvxpy.constraints + [self.g_cvxpy.variable == x_0])
-        try:
-            g_eval_subp.solve(solver=self.solver)
-            if g_eval_subp.status == "optimal" or g_eval_subp.status == "inaccurate_optimal":
-                g_0 = self.g_cvxpy.objective.value
-            else:
-                g_0 = np.inf
-        except Exception as e:
-            g_0 = np.inf
+        self.g_cvxpy.variable.value = x_0
+        g_0 = self.g_cvxpy.eval(solver=self.solver)
         objf_0 = f_0 + g_0
         if objf_0 < np.inf:
             self.method_results["soln"] = x_0
@@ -143,6 +131,39 @@ class OsmmUpdate:
             j += 1
         return t * x_k_plus_half + (1 - t) * xk, f_tmp, t, j + 1, end_evaluate_f_time - begin_evaluate_f_time
 
+    #### revision
+    def _line_search_exact_g(self, x_k_plus_half, xk, v_k_vec, g_k_plus_half, g_k, objf_k, G_k, H_diag_k, lam_k,
+                             var_val_prev,
+                             ep=1e-15):
+        begin_evaluate_f_time = time.time()
+        f_x_k_plus_half = self.f_torch.f_value(x_k_plus_half)
+        end_evaluate_f_time = time.time()
+
+        desc = np.square(max(ep, np.linalg.norm(G_k.T.dot(v_k_vec)))) + \
+               np.square(max(ep, np.linalg.norm(v_k_vec * np.sqrt(H_diag_k)))) \
+               + lam_k * np.square(max(ep, np.linalg.norm(v_k_vec)))
+        f_tmp = f_x_k_plus_half
+        g_tmp = g_k_plus_half
+        h_tmp = f_tmp + g_tmp
+        t = 1.0
+        j = 0
+        var_val_post = [var.value for var in self.g_cvxpy.all_var_list]
+        while j < self.j_max and (f_tmp is None or np.isnan(f_tmp) or
+                                  h_tmp > objf_k - 0.5 * self.alpha * t * desc):
+            t = t * self.beta
+            x_tmp = t * x_k_plus_half + (1 - t) * xk
+            f_tmp = self.f_torch.f_value(x_tmp)
+            # evaluate g at x_tmp
+            for i in range(len(var_val_prev)):
+                if var_val_prev[i] is not None and var_val_post[i] is not None:
+                    var = self.g_cvxpy.all_var_list[i]
+                    var.value = t * var_val_post[i] + (1 - t) * var_val_prev[i]
+            g_tmp = self.g_cvxpy.eval()
+            h_tmp = f_tmp + g_tmp
+            j += 1
+        return t * x_k_plus_half + (1 - t) * xk, f_tmp, t, j + 1, end_evaluate_f_time - begin_evaluate_f_time, g_tmp
+    ####
+
     def _update_curvature_after_solve(self, G_k, x_k_plus_one, x_k_plus_one_vec, xk_vec, f_grad_k_plus_one_vec,
                                       f_grad_k_vec):
         if self.alg_mode == AlgMode.LowRankQNBundle:
@@ -160,7 +181,7 @@ class OsmmUpdate:
                     f_consts_memory,
                     all_active_cuts, bundle_dual):
         #### revision
-        print("iter idx =", iter_idx, ", num_active_cuts", self.num_active_cuts)
+        # print("iter idx =", iter_idx, ", num_active_cuts", self.num_active_cuts)
         if all_active_cuts and self.num_active_cuts < self.gradient_memory:
             bundle_dual_revised = list(bundle_dual[0: self.num_active_cuts - 1]) \
                                   + [bundle_dual[self.num_active_cuts - 1] * (self.gradient_memory - self.num_active_cuts + 1)]
@@ -175,8 +196,6 @@ class OsmmUpdate:
             else:
                 bundle_dual_revised = bundle_dual
         active_cuts_idxs = np.where(bundle_dual_revised >= 1e-5)[0]
-        # active_cuts_idxs_redundant = np.where(bundle_dual >= 1e-5)[0]
-        # active_cuts_idxs = active_cuts_idxs_redundant[np.where(active_cuts_idxs_redundant < self.num_active_cuts)]
         if all_active_cuts and len(active_cuts_idxs) < self.gradient_memory:
             f_grads_memory[:, 0: len(active_cuts_idxs)] = f_grads_memory[:, active_cuts_idxs]
             f_consts_memory[0: len(active_cuts_idxs)] = f_consts_memory[active_cuts_idxs]
@@ -189,7 +208,8 @@ class OsmmUpdate:
             self.num_active_cuts = len(active_cuts_idxs) + 1
             return f_grads_memory, f_consts_memory
         if all_active_cuts and len(active_cuts_idxs) >= self.gradient_memory:
-            print("not enough gradient memory to store all active cuts")
+            print("Not enough gradient memory to store all active cutting-planes. "
+                  "Please increase the gradient memory size or switch to the latest M cutting-plane mode.")
         ####
         if iter_idx < self.gradient_memory:
             num_iters_remain = self.gradient_memory - iter_idx
@@ -223,12 +243,9 @@ class OsmmUpdate:
                                                    self.g_cvxpy.constraints + self.subprobs_param.bundle_constr)
                 lower_bound_subp = cp.Problem(cp.Minimize(self.subprobs_param.l_k + self.g_cvxpy.objective),
                                               self.g_cvxpy.constraints + self.subprobs_param.bundle_constr)
-                g_eval_subp = cp.Problem(cp.Minimize(self.g_cvxpy.objective), self.g_cvxpy.constraints +
-                                         [self.g_cvxpy.variable == self.subprobs_param.x_for_g_para])
             else:
                 tentative_update_subp = self.subprobs_param.cvxpy_subp
                 lower_bound_subp = self.subprobs_param.lower_bound_subp
-                g_eval_subp = self.subprobs_param.g_eval_subp
             self.subprobs_param.f_grads_iters_para.value = f_grads_memory
             self.subprobs_param.f_const_iters_para.value = f_consts_memory
             self.subprobs_param.sqrt_lam_para.value = np.sqrt(lam_k)
@@ -256,12 +273,11 @@ class OsmmUpdate:
                                                self.g_cvxpy.constraints + bundle_constr)
             lower_bound_subp = cp.Problem(cp.Minimize(l_k + self.g_cvxpy.objective),
                                           self.g_cvxpy.constraints + bundle_constr)
-            g_eval_subp = None
-        return tentative_update_subp, lower_bound_subp, g_eval_subp, bundle_constr
+        return tentative_update_subp, lower_bound_subp, bundle_constr
 
     def update_func(self, iter_idx, objf_k, f_k, g_k, lower_bound_k, f_grad_k, f_grads_memory, f_consts_memory, G_k,
                     H_diag_k, lam_k, mu_k, ep,
-                    all_active_cuts):
+                    all_active_cuts, exact_g_linea_search):
         if self.store_var_all_iters:
             if self.n1 == 0:
                 xk = np.array(self.method_results["var_iters"][:, iter_idx - 1])
@@ -274,10 +290,11 @@ class OsmmUpdate:
                 xk = np.array(self.method_results["var_iters"][:, :, 0])
 
         # tentative update
-        tentative_update_subp, lower_bound_subp, g_eval_subp, bundle_constr = \
+        tentative_update_subp, lower_bound_subp, bundle_constr = \
             self._get_subproblems(xk, f_grads_memory, f_consts_memory, lam_k, G_k, H_diag_k)
         begin_solve_time = time.time()
         subp_solver_success = True
+        var_val_prev = [var.value for var in self.g_cvxpy.all_var_list]
         try:
             tentative_update_subp.solve(solver=self.solver)
             if (tentative_update_subp.status != "optimal" and tentative_update_subp.status != "inaccurate_optimal") or \
@@ -287,8 +304,11 @@ class OsmmUpdate:
             subp_solver_success = False
             if self.verbose:
                 print("tentative update error:", e)
+        bundle_dual = bundle_constr[0].dual_value
         if not subp_solver_success:
-            self.g_cvxpy.variable.value = xk
+            for i in range(len(var_val_prev)):
+                var = self.g_cvxpy.all_var_list[i]
+                var.value = var_val_prev[i]
         end_solve_time = time.time()
         x_k_plus_half = self.g_cvxpy.variable.value
         v_k = x_k_plus_half - xk
@@ -296,50 +316,62 @@ class OsmmUpdate:
             v_k_vec = v_k
         else:
             v_k_vec = v_k.flatten(order='F')
-        g_k_plus_half = self.g_cvxpy.objective.value
-        bundle_dual = bundle_constr[0].dual_value
+        g_k_plus_half = self.g_cvxpy.objective.value  # no need to optimize over hidden var again
 
-        # line search
+        # line search and evaluate g at x_k_plus_one
         if subp_solver_success:
-            x_k_plus_one, f_k_plus_one, tk, num_f_evals, f_eval_time_cost \
-                = self._line_search(x_k_plus_half, xk, v_k_vec, g_k_plus_half, g_k, objf_k, G_k, H_diag_k, lam_k)
+            #### revision
+            if exact_g_linea_search:
+                x_k_plus_one, f_k_plus_one, tk, num_f_evals, f_eval_time_cost, g_k_plus_one = \
+                    self._line_search_exact_g(x_k_plus_half, xk, v_k_vec, g_k_plus_half, g_k, objf_k, G_k, H_diag_k,
+                                              lam_k, var_val_prev)
+            else:
+                x_k_plus_one, f_k_plus_one, tk, num_f_evals, f_eval_time_cost \
+                    = self._line_search(x_k_plus_half, xk, v_k_vec, g_k_plus_half, g_k, objf_k, G_k, H_diag_k, lam_k)
+                for i in range(len(var_val_prev)):
+                    if var_val_prev[i] is not None:
+                        var = self.g_cvxpy.all_var_list[i]
+                        var.value = tk * var.value + (1 - tk) * var_val_prev[i]
+                g_k_plus_one = self.g_cvxpy.eval()
+            ####
         else:
             x_k_plus_one = xk
             f_k_plus_one = f_k
             tk = 0
             num_f_evals = 0
             f_eval_time_cost = 0
+            g_k_plus_one = g_k
 
         # evaluate g at x_k_plus_one
-        self.g_cvxpy.variable.value = x_k_plus_one
-        if subp_solver_success and len(self.g_cvxpy.additional_var_soln) > 0:
-            ub_g_k_plus_one = self.g_cvxpy.objective.value
-            if self.subprobs_param is not None:
-                self.subprobs_param.x_for_g_para.value = x_k_plus_one
-            else:
-                g_eval_subp = cp.Problem(cp.Minimize(self.g_cvxpy.objective),
-                                         self.g_cvxpy.constraints + [self.g_cvxpy.variable == x_k_plus_one])
-            tmp_var_val = [var.value for var in g_eval_subp.variables()]
-            g_eval_success = True
-            try:
-                g_eval_subp.solve(solver=self.solver)
-                if g_eval_subp.status != "optimal" and g_eval_subp.status != "inaccurate_optimal":
-                    g_eval_success = False
-                if self.g_cvxpy.objective is None or self.g_cvxpy.objective.value == np.inf:
-                    g_eval_success = False
-            except Exception as e:
-                g_eval_success = False
-            if g_eval_success:
-                g_k_plus_one = self.g_cvxpy.objective.value
-            else:
-                g_k_plus_one = ub_g_k_plus_one
-                for i in range(len(tmp_var_val)):
-                    var = g_eval_subp.variables()[i]
-                    var.value = tmp_var_val[i]
-        elif subp_solver_success:
-            g_k_plus_one = self.g_cvxpy.objective.value
-        else:
-            g_k_plus_one = g_k
+        # self.g_cvxpy.variable.value = x_k_plus_one
+        # if subp_solver_success and len(self.g_cvxpy.additional_var_soln) > 0:
+        #     ub_g_k_plus_one = self.g_cvxpy.objective.value
+        #     if self.subprobs_param is not None:
+        #         self.subprobs_param.x_for_g_para.value = x_k_plus_one
+        #     else:
+        #         g_eval_subp = cp.Problem(cp.Minimize(self.g_cvxpy.objective),
+        #                                  self.g_cvxpy.constraints + [self.g_cvxpy.variable == x_k_plus_one])
+        #     tmp_var_val = [var.value for var in g_eval_subp.variables()]
+        #     g_eval_success = True
+        #     try:
+        #         g_eval_subp.solve(solver=self.solver)
+        #         if g_eval_subp.status != "optimal" and g_eval_subp.status != "inaccurate_optimal":
+        #             g_eval_success = False
+        #         if self.g_cvxpy.objective is None or self.g_cvxpy.objective.value == np.inf:
+        #             g_eval_success = False
+        #     except Exception as e:
+        #         g_eval_success = False
+        #     if g_eval_success:
+        #         g_k_plus_one = self.g_cvxpy.objective.value
+        #     else:
+        #         g_k_plus_one = ub_g_k_plus_one
+        #         for i in range(len(tmp_var_val)):
+        #             var = g_eval_subp.variables()[i]
+        #             var.value = tmp_var_val[i]
+        # elif subp_solver_success:
+        #     g_k_plus_one = self.g_cvxpy.objective.value
+        # else:
+        #     g_k_plus_one = g_k
         objf_k_plus_one = f_k_plus_one + g_k_plus_one
 
         # update best result found
