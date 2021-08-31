@@ -100,7 +100,7 @@ osmm_prob.f_torch.elementwise_mapping = my_elementwise_mapping_torch
 ```
 Then when calling the solve method, to use the approximation based on eigen-decomposition of the exact Hessian, run
 ```python3
-osmm_prob.solve(init_val, method="LowRankDiagEVD")
+osmm_prob.solve(init_val, hessian_mode="LowRankDiagEVD")
 ```
 To use exact Hessian, simply set argument `hessian_rank=n` in the above.
 
@@ -262,17 +262,21 @@ print("N = 30,000, cvxpy time cost = %.2f, opt value = %.5f" % (time.time() - t4
 ## Optional arguments and attributes
 Another attribute of `OSMM.f_torch` is `W_validate_torch`, which is a torch tensor in the same shape as `W`. If `W` contains a sampling matrix, then `W_validate_torch` can be used to provide another sampling matrix that gives *f(x, W_validate)*, which is then compared with *f(x, W)* to validate the sampling accuracy. Default is `None`.
 
-Optional arguments for the `solve` method are as follows.
+Optional arguments for the `solve` method that can change the algorithm used are as follows.
 * `hessian_rank` is the (maximum) rank of the low-rank quasi-Newton matrix used in the method, and with `hessian_rank=0` the method becomes a proximal bundle algorithm. Default is `20`.
 * `gradient_memory` is the memory in the piecewise affine bundle used in the method, and with `gradient_memory=0` the method becomes a proximal quasi-Newton algorithm. Default is `20`.
-* `method` either takes `"LowRankQNBundle"`, which is default, or `"LowRankDiagEVD"`, which can be applied only if *f* has a specific form as aforementioned.
+* `hessian_mode` either takes `"LowRankQNBundle"`, which is default, or `"LowRankDiagEVD"`, which can be applied only if *f* has a specific form as aforementioned.
+* `bundle_mode` either takes `"LatestM"`, which is default and uses the latest cutting-planes in the bundle, or `"AllActive"`, which retains all active cutting-planes for the bundle.
+* `solver` must be one of the solvers supported by CVXPY. Default value is `'ECOS'`.
+* `verbose` is a boolean giving the choice of printing information during the iterations. Default value is `False`.
+
+Optional arguments for the `solve` method which are less frequently adjusted are as follows.
 * `max_iter` is the maximum number of iterations. Default is `200`.
 * `check_gap_frequency` is the number of iterations between when we check the gap. Default is 10.
 * `update_curvature_frequency` is the number of iterations between when the Hessian is updated. Default is 1.
-* `solver` must be one of the solvers supported by CVXPY. Default value is `'ECOS'`.
-* `verbose` is a boolean giving the choice of printing information during the iterations. Default value is `False`.
 * `use_cvxpy_param` is a boolean giving the choice of using CVXPY parameters. Default value is `False`.
 * `store_var_all_iters` is a boolean giving the choice of whether the updates of *x* in all iterations are stored. Default value is `True`.
+* `exact_g_line_search` is a boolean indicating if exact g evaluation is used in line-search. Default value is `False`.
 * The following tolerances are used in the stopping criteria.
     * `eps_gap_abs` and `eps_gap_rel` are absolute and relative tolerances on the gap between upper and lower bounds on the optimal objective, respectively. Default values are `1e-4` and `1e-3`, respectively.
     * `eps_res_abs` and `eps_res_rel` are absolute and relative tolerances on a residue for an optimality condition, respectively. Default values are `1e-4` and `1e-3`, respectively.
