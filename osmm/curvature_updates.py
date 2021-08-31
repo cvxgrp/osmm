@@ -62,7 +62,6 @@ class CurvatureUpdate:
         if self.n > 10000:
             print("Fast eigen-decomposition for n >= 10000 not yet supported.")
         H = self.f_torch.f_hess_value(x)
-        print(H.shape)
         u_vec, s_arr, _ = np.linalg.svd(H)
         G_k_plus_one = u_vec[:, 0:self.hessian_rank].dot(np.diag(np.sqrt(s_arr[0:self.hessian_rank])))
         if self.hessian_rank == self.n:

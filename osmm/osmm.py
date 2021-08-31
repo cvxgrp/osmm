@@ -1,10 +1,10 @@
 import cvxpy as cp
 import numpy as np
-import torch
 import time
 
 from .osmm_update import OsmmUpdate
-from .alg_mode import AlgMode
+from .hessian_mode import HessianMode
+from .bundle_mode import BundleMode
 from .f_torch import FTorch
 from .g_cvxpy import GCvxpy
 
@@ -21,25 +21,33 @@ class OSMM:
 
     def solve(self, init_val, max_iter=200, hessian_rank=20, gradient_memory=20, solver="ECOS",
               eps_gap_abs=1e-4, eps_gap_rel=1e-3, eps_res_abs=1e-4, eps_res_rel=1e-3, check_gap_frequency=10,
-              method="LowRankQNBundle", update_curvature_frequency=1, min_iter=3,
+              hessian_mode="LowRankQN", bundle_mode="LatestM", update_curvature_frequency=1, min_iter=3,
               store_var_all_iters=True, verbose=False, use_termination_criteria=True, use_cvxpy_param=False,
               use_Hutchinson_init=True, tau_min=1e-3, mu_min=1e-4, mu_max=1e5, mu_0=1.0, gamma_inc=1.1, gamma_dec=0.8,
-              alpha=0.05, beta=0.5, j_max=10, ep=1e-15, trust_param_zero=False,
-              all_active_cuts=False, exact_g_linea_search=False):
+              alpha=0.05, beta=0.5, j_max=10, ep=1e-15, trust_param_zero=False, exact_g_line_search=False):
 
         assert hessian_rank >= 0
         assert gradient_memory >= 1
         assert self.f_torch.function is not None
         assert self.g_cvxpy.variable is not None
-        assert method == "LowRankQNBundle" or method == "LowRankDiagEVD"
+        assert hessian_mode == "LowRankQN" or hessian_mode == "LowRankDiagEVD" or hessian_mode == "Zero"
+        assert bundle_mode == "LatestM" or bundle_mode == "AllActive"
+        assert not (bundle_mode == "AllActive" and use_cvxpy_param)
 
-        if method == "LowRankQNBundle":
-            alg_mode = AlgMode.LowRankQNBundle
+        if hessian_mode == "LowRankQN":
+            hessian_mode = HessianMode.LowRankQN
+        elif hessian_mode == "LowRankDiagEVD":
+            hessian_mode = HessianMode.LowRankDiagEVD
         else:
-            alg_mode = AlgMode.LowRankDiagEVD
+            hessian_mode = HessianMode.Zero
         if hessian_rank == 0:
-            alg_mode = AlgMode.Bundle
+            hessian_mode = HessianMode.Zero
             hessian_rank = 1
+
+        if bundle_mode == "LatestM":
+            bundle_mode = BundleMode.LatestM
+        else:
+            bundle_mode = BundleMode.AllActive
 
         # set variable dimension
         self.n = self.g_cvxpy.variable.size
@@ -95,8 +103,8 @@ class OSMM:
         # method
         osmm_method = OsmmUpdate(self, hessian_rank, gradient_memory, use_cvxpy_param, solver, tau_min, mu_min, mu_max,
                                  gamma_inc, gamma_dec, alpha, beta, j_max, eps_gap_abs, eps_gap_rel, eps_res_abs,
-                                 eps_res_rel, verbose, alg_mode, check_gap_frequency, update_curvature_frequency,
-                                 trust_param_zero)
+                                 eps_res_rel, verbose, hessian_mode, bundle_mode, check_gap_frequency,
+                                 update_curvature_frequency, trust_param_zero, exact_g_line_search)
 
         # initialization
         objf_k, objf_validate_k, f_k, f_grad_k, g_k, lam_k, f_grads_memory, f_consts_memory, G_k, H_diag_k \
@@ -117,7 +125,7 @@ class OSMM:
         # iterative update
         iter_idx = 1
         stopping_criteria_satisfied = False
-        while iter_idx < max_iter and (
+        while iter_idx <= max_iter and (
                 not use_termination_criteria or iter_idx <= min_iter or not stopping_criteria_satisfied):
             iter_start_time = time.time()
 
@@ -125,8 +133,7 @@ class OSMM:
             lower_bound_k_plus_one, f_grad_k_plus_one, f_grads_memory, f_consts_memory, G_k_plus_one, \
             H_diag_k_plus_one, lam_k_plus_one, mu_k_plus_one \
                 = osmm_method.update_func(iter_idx, objf_k, f_k, g_k, lower_bound_k, f_grad_k,
-                                          f_grads_memory, f_consts_memory, G_k, H_diag_k, lam_k, mu_k, ep,
-                                          all_active_cuts, exact_g_linea_search)
+                                          f_grads_memory, f_consts_memory, G_k, H_diag_k, lam_k, mu_k, ep)
 
             iter_end_time = time.time()
             iter_runtime = iter_end_time - iter_start_time
