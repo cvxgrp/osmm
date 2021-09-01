@@ -22,18 +22,21 @@ np.random.seed(0)#10
 np.seterr(all='raise')
 
 N = 1000
-n = 1000
+n = 200
 pi = np.random.uniform(0, 1, N)
 pi = pi / np.sum(pi)
 target_mean = np.random.uniform(0.9, 1.1, n)
 
 
-def generate_random_data():
+def generate_random_data(seed=None):
+    if seed is not None:
+        np.random.seed(seed)
     R = np.exp(np.random.randn(n, N))
     tmp_mean = np.sum(R * pi, axis=1)
     R = (R.T / tmp_mean * target_mean).T
     W = np.zeros((n + 1, N))
     W[0:n, :] = R
+#     W[n - 1, :] = 1
     W[n, :] = pi
     return W
 

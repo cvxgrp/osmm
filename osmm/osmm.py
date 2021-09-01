@@ -125,7 +125,7 @@ class OSMM:
         # iterative update
         iter_idx = 1
         stopping_criteria_satisfied = False
-        while iter_idx <= max_iter and (
+        while iter_idx < max_iter and (
                 not use_termination_criteria or iter_idx <= min_iter or not stopping_criteria_satisfied):
             iter_start_time = time.time()
 
